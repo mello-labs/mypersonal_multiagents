@@ -1,49 +1,285 @@
-.PHONY: help install run env-check
+# =============================================================================
+# Makefile — Multiagentes Personal System
+# =============================================================================
+# Uso: make <comando>
+# Dica: make help  →  lista todos os comandos disponíveis
 
-PYTHON ?= python3
-APP := main.py
-ENV_FILE ?= .env
-VENV_DIR ?= .venv
-VENV_PYTHON := $(VENV_DIR)/bin/python3
-APP_PYTHON := $(if $(wildcard $(VENV_PYTHON)),$(VENV_PYTHON),$(PYTHON))
-CMD ?=
-ARGS ?=
+SHELL  := /bin/bash
+PYTHON := python3
+VENV   := .venv
+PIP    := $(VENV)/bin/pip
+PY     := $(VENV)/bin/python
 
-help:
-	@printf "\nComandos disponíveis:\n"
-	@printf "  make install           Cria .venv e instala dependências Python\n"
-	@printf "  make run               Abre o modo interativo\n"
-	@printf "  make run CMD=status    Executa comando simples da CLI\n"
-	@printf "  make run CMD=tasks     Lista tarefas\n"
-	@printf "  make run CMD=agenda    Mostra agenda de hoje\n"
-	@printf "  make run CMD=sync      Sincroniza com o Notion\n"
-	@printf "  make run CMD=suggest   Gera sugestão de agenda via LLM\n"
-	@printf "  make run CMD=add-task  Abre wizard para criar tarefa\n"
-	@printf "  make run CMD=demo      Cria dados de demonstração\n"
-	@printf "  make run CMD=validate ARGS=3         Valida tarefa\n"
-	@printf "  make run CMD=focus ARGS='start 3'    Inicia foco em tarefa\n"
-	@printf "  make run CMD=focus ARGS=end          Encerra foco ativo\n"
-	@printf "  make env-check         Confere variáveis essenciais do .env\n\n"
+# Cores ANSI
+BOLD   := \033[1m
+CYAN   := \033[36m
+GREEN  := \033[32m
+YELLOW := \033[33m
+RED    := \033[31m
+RESET  := \033[0m
 
-install:
-	$(PYTHON) -m venv $(VENV_DIR)
-	$(VENV_PYTHON) -m pip install --upgrade pip
-	$(VENV_PYTHON) -m pip install -r requirements.txt
-	@printf "\nAmbiente pronto em $(VENV_DIR).\n"
-	@printf "Ative com: source $(VENV_DIR)/bin/activate\n\n"
+.DEFAULT_GOAL := help
 
-run:
-	$(APP_PYTHON) $(APP) $(CMD) $(ARGS)
+# =============================================================================
+# AJUDA
+# =============================================================================
 
-env-check:
-	@for key in OPENAI_API_KEY NOTION_TOKEN NOTION_TASKS_DB_ID NOTION_AGENDA_DB_ID; do \
-		line=$$(grep -E "^$$key=" $(ENV_FILE) | head -n 1); \
-		value=$${line#*=}; \
-		value=$${value%%#*}; \
-		value=$$(printf "%s" "$$value" | sed 's/[[:space:]]*$$//'); \
-		if [ "$$key" = "OPENAI_API_KEY" ] || [ "$$key" = "NOTION_TOKEN" ]; then \
-			if [ -n "$$value" ]; then echo "$$key=set"; else echo "$$key=missing"; fi; \
-		else \
-			if [ -n "$$value" ]; then echo "$$key=$$value"; else echo "$$key=missing"; fi; \
-		fi; \
-	done
+.PHONY: help
+help: ## Exibe esta ajuda
+	@echo ""
+	@echo "  $(BOLD)$(CYAN)Multiagentes — Comandos disponíveis$(RESET)"
+	@echo ""
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ { \
+		printf "  $(GREEN)%-22s$(RESET) %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@echo ""
+
+# =============================================================================
+# SETUP
+# =============================================================================
+
+.PHONY: setup
+setup: venv install env-copy redis-pull ## Configura tudo do zero (venv + deps + .env)
+	@echo "$(GREEN)✓ Setup completo! Edite o .env e rode: make dev$(RESET)"
+
+.PHONY: venv
+venv: ## Cria o virtualenv
+	@test -d $(VENV) || $(PYTHON) -m venv $(VENV)
+	@echo "$(GREEN)✓ Virtualenv em $(VENV)/$(RESET)"
+
+.PHONY: install
+install: venv ## Instala dependências Python
+	@$(PIP) install --upgrade pip -q
+	@$(PIP) install -r requirements.txt
+	@echo "$(GREEN)✓ Dependências instaladas$(RESET)"
+
+.PHONY: install-dev
+install-dev: install ## Instala dependências + extras dev (ipython, ruff, etc.)
+	@$(PIP) install ipython rich watchdog ruff pytest-cov pytest-watch -q
+	@echo "$(GREEN)✓ Dev extras instalados$(RESET)"
+
+.PHONY: redis-pull
+redis-pull: ## Baixa imagem Redis Docker (uma vez só)
+	@docker pull redis:7-alpine -q && echo "$(GREEN)✓ Redis image pronta$(RESET)"
+
+# =============================================================================
+# DESENVOLVIMENTO
+# =============================================================================
+
+.PHONY: dev
+dev: ## Inicia servidor FastAPI com hot-reload (porta 8000)
+	@echo "$(CYAN)→ http://localhost:8000$(RESET)"
+	@REDIS_URL=$${REDIS_URL:-redis://localhost:6379/0} \
+		$(VENV)/bin/uvicorn web.app:app --host 127.0.0.1 --port 8000 --reload
+
+.PHONY: dev-full
+dev-full: redis-up ## Sobe Redis local + FastAPI com hot-reload
+	@sleep 1
+	@$(MAKE) dev
+
+.PHONY: guard
+guard: ## Inicia Focus Guard no terminal
+	@$(PY) main.py
+
+.PHONY: chat
+chat: ## Modo chat interativo com o Orchestrator
+	@$(PY) main.py chat
+
+.PHONY: status
+status: ## Exibe status atual do sistema
+	@$(PY) main.py status
+
+# =============================================================================
+# REDIS LOCAL (Docker)
+# =============================================================================
+
+REDIS_CONTAINER := multiagentes-redis
+
+.PHONY: redis-up
+redis-up: ## Sobe Redis local via Docker (porta 6379)
+	@docker run -d --rm \
+		--name $(REDIS_CONTAINER) \
+		-p 6379:6379 \
+		redis:7-alpine \
+		> /dev/null 2>&1 || true
+	@sleep 0.5
+	@echo "$(GREEN)✓ Redis rodando em localhost:6379$(RESET)"
+
+.PHONY: redis-down
+redis-down: ## Para o Redis local Docker
+	@docker stop $(REDIS_CONTAINER) 2>/dev/null || true
+	@echo "$(YELLOW)✓ Redis parado$(RESET)"
+
+.PHONY: redis-cli
+redis-cli: ## Abre Redis CLI interativo
+	@docker exec -it $(REDIS_CONTAINER) redis-cli
+
+.PHONY: redis-keys
+redis-keys: ## Lista todas as chaves no Redis (ordenadas)
+	@docker exec $(REDIS_CONTAINER) redis-cli KEYS '*' | sort
+
+.PHONY: redis-stats
+redis-stats: ## Exibe estatísticas do Redis (memória, conexões, etc.)
+	@docker exec $(REDIS_CONTAINER) redis-cli INFO stats | grep -E "connected|commands|memory|keys"
+
+.PHONY: redis-flush
+redis-flush: ## ⚠️  Apaga TODOS os dados do Redis local
+	@echo "$(RED)⚠️  Isso apaga TODOS os dados locais!$(RESET)"
+	@read -p "Confirma? [s/N] " c && [ "$$c" = "s" ] && \
+		docker exec $(REDIS_CONTAINER) redis-cli FLUSHALL && \
+		echo "$(YELLOW)✓ Redis limpo$(RESET)" || echo "Cancelado."
+
+.PHONY: redis-ping
+redis-ping: ## Testa conexão Redis
+	@docker exec $(REDIS_CONTAINER) redis-cli PING
+
+# =============================================================================
+# AGENTES
+# =============================================================================
+
+.PHONY: sync
+sync: ## Sincronização diferencial com Notion
+	@$(PY) main.py sync
+
+.PHONY: agenda
+agenda: ## Exibe agenda de hoje
+	@$(PY) main.py agenda
+
+.PHONY: tasks
+tasks: ## Lista todas as tarefas
+	@$(PY) main.py tasks
+
+.PHONY: retro
+retro: ## Gera retrospectiva semanal (local, sem push)
+	@$(PY) main.py retrospective
+
+.PHONY: retro-push
+retro-push: ## Gera retrospectiva e envia ao Notion
+	@$(PY) main.py retrospective --push
+
+.PHONY: calendar-auth
+calendar-auth: ## Autentica Google Calendar (OAuth2)
+	@$(PY) main.py calendar auth
+
+.PHONY: calendar-import
+calendar-import: ## Importa eventos de hoje do Google Calendar
+	@$(PY) main.py calendar import
+
+.PHONY: calendar-status
+calendar-status: ## Status da integração Google Calendar
+	@$(PY) main.py calendar status
+
+# =============================================================================
+# TESTES
+# =============================================================================
+
+.PHONY: test
+test: ## Roda todos os testes
+	@$(VENV)/bin/pytest tests/ -v --tb=short
+
+.PHONY: test-q
+test-q: ## Roda testes modo silencioso
+	@$(VENV)/bin/pytest tests/ -q
+
+.PHONY: test-cov
+test-cov: ## Testes com relatório de cobertura (abre htmlcov/)
+	@$(VENV)/bin/pytest tests/ --cov=. --cov-report=term-missing --cov-report=html
+	@echo "$(CYAN)→ Relatório em htmlcov/index.html$(RESET)"
+
+.PHONY: test-watch
+test-watch: ## Roda testes automaticamente ao salvar (watch mode)
+	@$(VENV)/bin/ptw tests/ -- -v
+
+# =============================================================================
+# QUALIDADE DE CÓDIGO
+# =============================================================================
+
+.PHONY: lint
+lint: ## Verifica estilo com ruff
+	@$(VENV)/bin/ruff check . || true
+
+.PHONY: fmt
+fmt: ## Formata código com ruff
+	@$(VENV)/bin/ruff format .
+	@echo "$(GREEN)✓ Código formatado$(RESET)"
+
+.PHONY: check
+check: lint test ## lint + testes (CI local completo)
+
+# =============================================================================
+# GIT & DEPLOY
+# =============================================================================
+
+.PHONY: push
+push: ## add + commit interativo + push
+	@read -p "$(CYAN)Mensagem do commit: $(RESET)" msg && \
+		git add -A && \
+		git commit -m "$$msg" && \
+		git push origin main && \
+		echo "$(GREEN)✓ Push feito$(RESET)"
+
+.PHONY: push-fix
+push-fix: ## Commit rápido de fix + push
+	@read -p "$(YELLOW)Fix: $(RESET)" msg && \
+		git add -A && \
+		git commit -m "fix: $$msg" && \
+		git push origin main
+
+.PHONY: push-feat
+push-feat: ## Commit rápido de feat + push
+	@read -p "$(CYAN)Feature: $(RESET)" msg && \
+		git add -A && \
+		git commit -m "feat: $$msg" && \
+		git push origin main
+
+.PHONY: log
+log: ## Git log compacto (últimos 10 commits)
+	@git log --oneline --graph --decorate -10
+
+.PHONY: diff
+diff: ## Git diff staged
+	@git diff --staged
+
+# =============================================================================
+# DIAGNÓSTICO & AMBIENTE
+# =============================================================================
+
+.PHONY: env-check
+env-check: ## Verifica variáveis de ambiente obrigatórias
+	@$(PY) -c "from config import validate_config; w = validate_config(); \
+		[print('⚠ ', x) for x in w] or print('✓ Config OK')"
+
+.PHONY: env-copy
+env-copy: ## Copia .env.example → .env (se não existir)
+	@test -f .env && echo ".env já existe" || \
+		(cp .env.example .env && echo "$(YELLOW)✓ .env criado — preencha as chaves!$(RESET)")
+
+.PHONY: health
+health: ## Checa o endpoint /health (app local)
+	@curl -s http://localhost:8000/health | $(PYTHON) -m json.tool
+
+.PHONY: logs
+logs: ## Exibe últimas linhas dos logs
+	@ls logs/*.log 2>/dev/null | xargs tail -n 50 || echo "Sem logs em logs/."
+
+.PHONY: info
+info: ## Exibe info do ambiente
+	@echo ""
+	@echo "  $(BOLD)Python:$(RESET)      $$($(PY) --version)"
+	@echo "  $(BOLD)Pip:$(RESET)         $$($(PIP) --version | cut -d' ' -f1-2)"
+	@echo "  $(BOLD)Uvicorn:$(RESET)     $$($(VENV)/bin/uvicorn --version 2>/dev/null || echo 'não instalado')"
+	@echo "  $(BOLD)Redis:$(RESET)       $$(docker exec $(REDIS_CONTAINER) redis-cli PING 2>/dev/null || echo 'container parado')"
+	@echo "  $(BOLD)Branch:$(RESET)      $$(git branch --show-current)"
+	@echo "  $(BOLD)Último commit:$(RESET) $$(git log --oneline -1)"
+	@echo ""
+
+.PHONY: clean
+clean: ## Remove cache Python e arquivos temporários
+	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@find . \( -name "*.pyc" -o -name "*.pyo" \) -delete 2>/dev/null || true
+	@rm -rf .ruff_cache htmlcov .coverage 2>/dev/null || true
+	@echo "$(GREEN)✓ Cache limpo$(RESET)"
+
+.PHONY: clean-all
+clean-all: clean redis-down ## Remove cache + venv + para Redis (reset total)
+	@rm -rf $(VENV)
+	@echo "$(YELLOW)✓ Reset completo — rode: make setup$(RESET)"
