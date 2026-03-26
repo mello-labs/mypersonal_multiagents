@@ -25,7 +25,7 @@ from config import OPENAI_API_KEY, OPENAI_MODEL
 from core import memory, notifier
 
 # Importa os agentes especialistas
-from agents import scheduler, focus_guard, notion_sync, validator
+from agents import scheduler, focus_guard, notion_sync, validator, retrospective, calendar_sync
 
 AGENT_NAME = "orchestrator"
 _client = OpenAI(api_key=OPENAI_API_KEY)
@@ -74,6 +74,14 @@ AGENTS_REGISTRY = {
             "validate_all",
             "get_evidence",
         ],
+    },
+    "retrospective": {
+        "description": "Gera relatório de retrospectiva semanal com métricas e insights.",
+        "actions": ["run", "metrics_only"],
+    },
+    "calendar_sync": {
+        "description": "Sincroniza agenda com Google Calendar — importa eventos e exporta blocos.",
+        "actions": ["import_today", "fetch_today", "fetch_week", "export_block", "status"],
     },
 }
 
@@ -191,10 +199,12 @@ Retorne o JSON de roteamento.""",
 # ---------------------------------------------------------------------------
 
 _AGENT_HANDLERS = {
-    "scheduler":   scheduler.handle_handoff,
-    "focus_guard": focus_guard.handle_handoff,
-    "notion_sync": notion_sync.handle_handoff,
-    "validator":   validator.handle_handoff,
+    "scheduler":    scheduler.handle_handoff,
+    "focus_guard":  focus_guard.handle_handoff,
+    "notion_sync":  notion_sync.handle_handoff,
+    "validator":    validator.handle_handoff,
+    "retrospective": retrospective.handle_handoff,
+    "calendar_sync": calendar_sync.handle_handoff,
 }
 
 

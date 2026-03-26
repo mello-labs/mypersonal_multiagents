@@ -357,3 +357,39 @@ def acknowledge_alert(alert_id: int) -> None:
     """Marca um alerta como reconhecido."""
     with _lock, _get_connection() as conn:
         conn.execute("UPDATE alerts SET acknowledged = 1 WHERE id = ?", (alert_id,))
+
+
+# =============================================================================
+# RETROSPECTIVE QUERIES
+# =============================================================================
+
+def get_sessions_since(since_iso: str) -> list[dict]:
+    """Retorna sessões de foco iniciadas desde uma data ISO."""
+    with _get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM focus_sessions WHERE started_at >= ? ORDER BY started_at ASC",
+            (since_iso,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_completed_tasks_since(since_iso: str) -> list[dict]:
+    """Retorna tarefas marcadas como Concluído desde uma data ISO."""
+    with _get_connection() as conn:
+        rows = conn.execute(
+            """SELECT * FROM tasks
+               WHERE status = 'Concluído' AND updated_at >= ?
+               ORDER BY updated_at DESC""",
+            (since_iso,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_handoffs_since(since_iso: str) -> list[dict]:
+    """Retorna handoffs de agentes desde uma data ISO."""
+    with _get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM agent_handoffs WHERE created_at >= ? ORDER BY created_at ASC",
+            (since_iso,),
+        ).fetchall()
+        return [dict(r) for r in rows]

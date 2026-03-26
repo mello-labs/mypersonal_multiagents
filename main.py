@@ -478,6 +478,69 @@ def cmd_chat() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Novos comandos Phase 2
+# ---------------------------------------------------------------------------
+
+
+def cmd_retrospective() -> None:
+    """Gera a retrospectiva semanal."""
+    from agents import retrospective as retro
+    notifier.separator("RETROSPECTIVA SEMANAL")
+
+    push = input("  Criar página no Notion? [s/N]: ").strip().lower() == "s"
+    result = retro.run_retrospective(push_to_notion=push)
+
+    m = result["metrics"]
+    notifier.success(
+        f"Retrospectiva gerada! Foco: {m['total_focus_hours']}h | "
+        f"Tarefas: {m['tasks_completed']} | Taxa: {m['completion_rate_pct']}%"
+    )
+    notifier.info(f"Salvo em: {result['local_path']}", "retrospective")
+
+    print(f"\n{result['report_preview']}")
+
+
+def cmd_web() -> None:
+    """Inicia a interface web."""
+    import uvicorn
+    from config import WEB_HOST, WEB_PORT
+    notifier.info(f"Iniciando interface web em http://{WEB_HOST}:{WEB_PORT}", "web")
+    uvicorn.run("web.app:app", host=WEB_HOST, port=WEB_PORT, reload=False)
+
+
+def cmd_calendar_auth() -> None:
+    """Autoriza o Google Calendar."""
+    from agents import calendar_sync
+    notifier.info("Iniciando fluxo de autorização do Google Calendar...", "calendar")
+    notifier.info("O browser será aberto para autorização.", "calendar")
+    if calendar_sync.authorize():
+        notifier.success("Autorização concluída! Use 'calendar import' para importar eventos.")
+    else:
+        notifier.error("Autorização falhou. Verifique o credentials.json.")
+
+
+def cmd_calendar_import() -> None:
+    """Importa eventos de hoje do Google Calendar."""
+    from agents import calendar_sync
+    count = calendar_sync.import_today_as_blocks()
+    notifier.success(f"{count} evento(s) importados como blocos de agenda.")
+
+
+def cmd_calendar_status() -> None:
+    """Status da integração com o Google Calendar."""
+    from agents import calendar_sync
+    notifier.separator("GOOGLE CALENDAR STATUS")
+    notifier.info(f"Autorizado: {calendar_sync.is_authorized()}", "calendar")
+    notifier.info(f"Calendário: {calendar_sync.GOOGLE_CALENDAR_ID}", "calendar")
+    if calendar_sync.is_authorized():
+        events = calendar_sync.fetch_today_events()
+        notifier.info(f"Eventos hoje: {len(events)}", "calendar")
+        for ev in events[:5]:
+            notifier.info(f"  {ev['time_slot']} — {ev['title']}", "calendar")
+    notifier.separator()
+
+
+# ---------------------------------------------------------------------------
 # Parser CLI
 # ---------------------------------------------------------------------------
 
@@ -542,6 +605,19 @@ Exemplos:
     # demo
     subparsers.add_parser("demo", help="Cria dados de demonstração")
 
+    # retrospective
+    subparsers.add_parser("retrospective", help="Gera retrospectiva semanal")
+
+    # web
+    subparsers.add_parser("web", help="Inicia interface web (FastAPI)")
+
+    # calendar
+    calendar_parser = subparsers.add_parser("calendar", help="Gerencia integração com Google Calendar")
+    cal_sub = calendar_parser.add_subparsers(dest="calendar_action", metavar="AÇÃO")
+    cal_sub.add_parser("auth",   help="Autoriza acesso ao Google Calendar")
+    cal_sub.add_parser("import", help="Importa eventos de hoje como blocos de agenda")
+    cal_sub.add_parser("status", help="Status da integração com o Calendar")
+
     return parser
 
 
@@ -586,6 +662,19 @@ def main() -> None:
         cmd_validate(getattr(args, "task_id", None))
     elif command == "demo":
         cmd_demo()
+    elif command == "retrospective":
+        cmd_retrospective()
+    elif command == "web":
+        cmd_web()
+    elif command == "calendar":
+        if args.calendar_action == "auth":
+            cmd_calendar_auth()
+        elif args.calendar_action == "import":
+            cmd_calendar_import()
+        elif args.calendar_action == "status":
+            cmd_calendar_status()
+        else:
+            notifier.error("Use: python main.py calendar [auth|import|status]", "main")
     else:
         parser.print_help()
 

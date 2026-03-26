@@ -8,3 +8,7 @@ __pycache__/
 *.db
 *.db-journal
 logs/
+reports/
+token.json
+credentials.json
+*.plist

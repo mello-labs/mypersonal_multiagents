@@ -23,8 +23,9 @@ import schedule
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from openai import OpenAI
-from config import OPENAI_API_KEY, OPENAI_MODEL, FOCUS_CHECK_INTERVAL_MINUTES
+from config import OPENAI_API_KEY, OPENAI_MODEL, FOCUS_CHECK_INTERVAL_MINUTES, NOTION_SYNC_INTERVAL_MINUTES
 from core import memory, notifier
+from agents import notion_sync as _notion_sync
 
 AGENT_NAME = "focus_guard"
 _client = OpenAI(api_key=OPENAI_API_KEY)
@@ -220,6 +221,16 @@ def _run_focus_check() -> None:
     notifier.separator()
 
 
+def _run_differential_sync() -> None:
+    """Callback do scheduler para sync diferencial periódico."""
+    try:
+        count = _notion_sync.sync_differential()
+        if count:
+            notifier.info(f"Auto-sync: {count} tarefa(s) sincronizada(s).", AGENT_NAME)
+    except Exception as e:
+        notifier.warning(f"Erro no auto-sync diferencial: {e}", AGENT_NAME)
+
+
 def _background_loop() -> None:
     """Thread principal do Focus Guard — roda o scheduler.run_pending() em loop."""
     notifier.agent_event(
@@ -227,8 +238,11 @@ def _background_loop() -> None:
         AGENT_NAME,
     )
 
-    # Configura o job periódico
+    # Configura o job periódico de check de foco
     schedule.every(FOCUS_CHECK_INTERVAL_MINUTES).minutes.do(_run_focus_check)
+
+    # Configura sync diferencial periódico
+    schedule.every(NOTION_SYNC_INTERVAL_MINUTES).minutes.do(_run_differential_sync)
 
     # Executa uma verificação imediata ao iniciar
     _run_focus_check()

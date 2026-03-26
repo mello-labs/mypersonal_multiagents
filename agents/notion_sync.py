@@ -20,7 +20,9 @@
 
 import requests
 from datetime import datetime, date
-from typing import Optional, Any
+from typing import Optional, Any, List
+
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 import sys
 import os
@@ -52,19 +54,35 @@ def _headers() -> dict:
     }
 
 
+class _NotionRateLimitError(RuntimeError):
+    """Levantada em 429 ou 5xx — elegível para retry automático."""
+
+
+@retry(
+    retry=retry_if_exception_type(_NotionRateLimitError),
+    wait=wait_exponential(multiplier=1, min=1, max=30),
+    stop=stop_after_attempt(4),
+    reraise=True,
+)
 def _request(method: str, endpoint: str, data: Optional[dict] = None) -> dict:
     """
     Faz uma requisição à Notion API.
-    Levanta RuntimeError em caso de falha HTTP.
+    Faz retry automático em 429 (rate limit) e 5xx com backoff exponencial (1s→2s→4s→30s).
+    Levanta RuntimeError em caso de falha não-recuperável.
     """
     url = f"{NOTION_API_BASE}/{endpoint.lstrip('/')}"
     response = requests.request(method, url, headers=_headers(), json=data, timeout=15)
 
-    if not response.ok:
-        error_body = response.text[:500]
-        raise RuntimeError(
-            f"Notion API erro {response.status_code} em {method} {endpoint}: {error_body}"
+    if response.status_code == 429 or response.status_code >= 500:
+        raise _NotionRateLimitError(
+            f"Notion API erro {response.status_code} em {method} {endpoint}: {response.text[:200]}"
         )
+
+    if not response.ok:
+        raise RuntimeError(
+            f"Notion API erro {response.status_code} em {method} {endpoint}: {response.text[:500]}"
+        )
+
     return response.json()
 
 
@@ -370,6 +388,85 @@ def _extract_checkbox(prop: Optional[dict]) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Sincronização diferencial
+# ---------------------------------------------------------------------------
+
+def fetch_tasks_modified_since(last_sync_iso: str) -> list[dict]:
+    """Puxa apenas tarefas modificadas após last_sync_iso (polling diferencial)."""
+    if not NOTION_TOKEN or not NOTION_TASKS_DB_ID:
+        return []
+
+    payload: dict[str, Any] = {
+        "page_size": 100,
+        "filter": {
+            "timestamp": "last_edited_time",
+            "last_edited_time": {"after": last_sync_iso},
+        },
+    }
+
+    result = _request("POST", f"databases/{NOTION_TASKS_DB_ID}/query", payload)
+    tasks = []
+    for page in result.get("results", []):
+        props = page.get("properties", {})
+        task = {
+            "notion_page_id":   page["id"],
+            "title":            _extract_title(props.get("Nome")),
+            "status":           _extract_select(props.get("Status")),
+            "priority":         _extract_select(props.get("Prioridade")),
+            "scheduled_time":   _extract_rich_text(props.get("Horário previsto")),
+            "actual_time":      _extract_rich_text(props.get("Horário real")),
+            "last_edited_time": page.get("last_edited_time", ""),
+        }
+        tasks.append(task)
+
+    notifier.info(
+        f"Sync diferencial: {len(tasks)} tarefa(s) modificada(s) desde {last_sync_iso[:16]}.",
+        AGENT_NAME,
+    )
+    return tasks
+
+
+def sync_differential() -> int:
+    """
+    Sincronização diferencial: importa do Notion apenas o que mudou desde
+    o último sync. Guarda/lê o timestamp em system_state['notion_last_sync_ts'].
+    Retorna número de tarefas criadas/atualizadas.
+    """
+    last_sync = memory.get_state("notion_last_sync_ts")
+
+    if not last_sync:
+        notifier.info("Primeira sync — executando full sync.", AGENT_NAME)
+        count = sync_tasks_to_local()
+    else:
+        modified = fetch_tasks_modified_since(last_sync)
+        count = 0
+        all_local = memory.list_all_tasks()
+        local_by_notion_id = {lt["notion_page_id"]: lt for lt in all_local if lt.get("notion_page_id")}
+
+        for nt in modified:
+            existing = local_by_notion_id.get(nt["notion_page_id"])
+            if existing:
+                if nt["status"] and existing["status"] != nt["status"]:
+                    memory.update_task_status(existing["id"], nt["status"])
+                    count += 1
+            else:
+                task_id = memory.create_task(
+                    title=nt["title"] or "Sem título",
+                    priority=nt["priority"] or "Média",
+                    scheduled_time=nt["scheduled_time"],
+                    notion_page_id=nt["notion_page_id"],
+                )
+                if nt["status"]:
+                    memory.update_task_status(task_id, nt["status"])
+                count += 1
+
+    memory.set_state("notion_last_sync_ts", datetime.now().isoformat())
+    if count:
+        notifier.success(f"Sync diferencial: {count} tarefa(s) processada(s).", AGENT_NAME)
+    return count
+
+
+# ---------------------------------------------------------------------------
 # Handoff entry point — chamado pelo Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -437,6 +534,10 @@ def handle_handoff(payload: dict) -> dict:
                 "local_blocks": local_blocks,
                 "total": len(blocks) or len(local_blocks),
             }
+
+        elif action == "sync_differential":
+            count = sync_differential()
+            result = {"synced": count, "message": f"{count} tarefa(s) atualizada(s) pelo sync diferencial."}
 
         else:
             raise ValueError(f"Ação desconhecida: '{action}'")
