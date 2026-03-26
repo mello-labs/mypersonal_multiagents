@@ -9,26 +9,32 @@
 
 import asyncio
 import sys
+import threading
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI, Request, Form, BackgroundTasks
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi import BackgroundTasks, FastAPI, Form, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from agents import orchestrator, focus_guard
-from agents import notion_sync
+from agents import focus_guard, notion_sync, orchestrator
 from core import memory
 
 BASE_DIR = Path(__file__).parent
+MAX_CHAT_TURNS = 12
+CHAT_SESSION_COOKIE = "multiagentes_chat_sid"
+_chat_sessions: dict[str, list[dict]] = {}
+_chat_sessions_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
 # Lifespan: inicia/para Focus Guard junto com o servidor
 # ---------------------------------------------------------------------------
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -79,19 +85,43 @@ async def _safe_async(coro, fallback):
 
 def _summary_ctx() -> dict:
     """Contexto de resumo do sistema — nunca lança exceção."""
-    summary = _safe(orchestrator.get_system_summary, {
-        "tasks": {"a_fazer": 0, "em_progresso": 0, "concluido": 0},
-        "focus": {"guard_running": focus_guard.is_running(), "on_track": True},
-        "agenda_today": {"total_blocks": 0, "completed": 0},
-        "alerts": {"pending": 0},
-        "redis_ok": False,
-    })
+    summary = _safe(
+        orchestrator.get_system_summary,
+        {
+            "tasks": {"a_fazer": 0, "em_progresso": 0, "concluido": 0},
+            "focus": {"guard_running": focus_guard.is_running(), "on_track": True},
+            "agenda_today": {"total_blocks": 0, "completed": 0},
+            "alerts": {"pending": 0},
+            "redis_ok": False,
+        },
+    )
     return {"summary": summary}
+
+
+def _get_chat_session_id(request: Request) -> tuple[str, bool]:
+    current = request.cookies.get(CHAT_SESSION_COOKIE)
+    if current:
+        return current, False
+    return uuid.uuid4().hex, True
+
+
+def _get_chat_history(session_id: str) -> list[dict]:
+    with _chat_sessions_lock:
+        history = _chat_sessions.get(session_id, [])
+        return list(history)
+
+
+def _store_chat_turn(session_id: str, role: str, content: str) -> None:
+    with _chat_sessions_lock:
+        history = list(_chat_sessions.get(session_id, []))
+        history.append({"role": role, "content": content})
+        _chat_sessions[session_id] = history[-MAX_CHAT_TURNS:]
 
 
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 async def health():
@@ -111,11 +141,12 @@ async def health():
 # Rotas full-page
 # ---------------------------------------------------------------------------
 
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     ctx = _summary_ctx()
-    ctx["agenda"]     = _safe(memory.get_today_agenda, [])
-    ctx["tasks"]      = _safe(memory.list_all_tasks, [])
+    ctx["agenda"] = _safe(memory.get_today_agenda, [])
+    ctx["tasks"] = _safe(memory.list_all_tasks, [])
     ctx["redis_warn"] = "" if ctx["summary"].get("redis_ok") else _REDIS_WARN
     return templates.TemplateResponse(request, "index.html", ctx)
 
@@ -124,18 +155,35 @@ async def index(request: Request):
 # Partials HTMX
 # ---------------------------------------------------------------------------
 
+
 @app.post("/chat", response_class=HTMLResponse)
 async def chat(request: Request, message: str = Form(...)):
     """Chat com o Orchestrator — I/O bloqueante movido para thread pool."""
+    session_id, is_new_session = _get_chat_session_id(request)
+    history = _get_chat_history(session_id)
+    context = {
+        "chat_history": history[-6:],
+        "system_summary": _safe(orchestrator.get_system_summary, {}),
+    }
     try:
-        response = await asyncio.to_thread(orchestrator.process, message)
+        response = await asyncio.to_thread(orchestrator.process, message, context)
     except Exception as e:
         response = f"⚠️ Erro: {e}"
-    return templates.TemplateResponse(
+    _store_chat_turn(session_id, "user", message)
+    _store_chat_turn(session_id, "assistant", response)
+    template_response = templates.TemplateResponse(
         request,
         "partials/chat_message.html",
         {"user_message": message, "bot_response": response},
     )
+    if is_new_session:
+        template_response.set_cookie(
+            CHAT_SESSION_COOKIE,
+            session_id,
+            httponly=True,
+            samesite="lax",
+        )
+    return template_response
 
 
 @app.get("/status", response_class=HTMLResponse)
@@ -146,7 +194,8 @@ async def status(request: Request):
 @app.get("/agenda", response_class=HTMLResponse)
 async def agenda(request: Request):
     return templates.TemplateResponse(
-        request, "partials/agenda.html",
+        request,
+        "partials/agenda.html",
         {"blocks": _safe(memory.get_today_agenda, [])},
     )
 
@@ -154,7 +203,8 @@ async def agenda(request: Request):
 @app.get("/tasks", response_class=HTMLResponse)
 async def tasks(request: Request):
     return templates.TemplateResponse(
-        request, "partials/tasks.html",
+        request,
+        "partials/tasks.html",
         {"tasks": _safe(memory.list_all_tasks, [])},
     )
 
@@ -166,13 +216,17 @@ async def create_task(
     priority: str = Form("Média"),
     scheduled_time: str = Form(""),
 ):
-    _safe(lambda: memory.create_task(
-        title=title,
-        priority=priority,
-        scheduled_time=scheduled_time or None,
-    ), None)
+    _safe(
+        lambda: memory.create_task(
+            title=title,
+            priority=priority,
+            scheduled_time=scheduled_time or None,
+        ),
+        None,
+    )
     return templates.TemplateResponse(
-        request, "partials/tasks.html",
+        request,
+        "partials/tasks.html",
         {"tasks": _safe(memory.list_all_tasks, [])},
     )
 
@@ -187,7 +241,8 @@ async def complete_task(request: Request, task_id: int):
             request, "partials/task_row.html", {"t": task}
         )
     return templates.TemplateResponse(
-        request, "partials/tasks.html",
+        request,
+        "partials/tasks.html",
         {"tasks": _safe(memory.list_all_tasks, [])},
     )
 
@@ -226,5 +281,7 @@ async def complete_block(request: Request, block_id: int):
 
 if __name__ == "__main__":
     import uvicorn
+
     from config import WEB_HOST, WEB_PORT
+
     uvicorn.run("web.app:app", host=WEB_HOST, port=WEB_PORT, reload=True)

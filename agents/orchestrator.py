@@ -13,19 +13,27 @@
 # qual combinação de agentes acionar e em que ordem.
 
 import json
-import sys
 import os
+import re
+import sys
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from openai import OpenAI
-from config import OPENAI_API_KEY, OPENAI_MODEL
-from core import memory, notifier
 
 # Importa os agentes especialistas
-from agents import scheduler, focus_guard, notion_sync, validator, retrospective, calendar_sync
+from agents import (
+    calendar_sync,
+    focus_guard,
+    notion_sync,
+    retrospective,
+    scheduler,
+    validator,
+)
+from config import OPENAI_API_KEY, OPENAI_MODEL
+from core import memory, notifier
 
 AGENT_NAME = "orchestrator"
 _client = OpenAI(api_key=OPENAI_API_KEY)
@@ -81,7 +89,13 @@ AGENTS_REGISTRY = {
     },
     "calendar_sync": {
         "description": "Sincroniza agenda com Google Calendar — importa eventos e exporta blocos.",
-        "actions": ["import_today", "fetch_today", "fetch_week", "export_block", "status"],
+        "actions": [
+            "import_today",
+            "fetch_today",
+            "fetch_week",
+            "export_block",
+            "status",
+        ],
     },
 }
 
@@ -118,6 +132,8 @@ Regras importantes:
 - Para marcar tarefa como concluída, sempre passe pelo validator ANTES de confirmar
 - Para verificar agenda, combine scheduler + notion_sync
 - Se o usuário perguntar sobre foco/progresso, acione o focus_guard
+- Se o usuário perguntar sobre atraso, alertas, avisos, notificações ou status do sistema, consulte os agentes.
+- Não responda diretamente sobre estado operacional se você não consultou dados reais.
 - Quando múltiplos agentes são necessários, ordene-os pela lógica de execução
 - Se nenhum agente for necessário, retorne handoffs vazio e responda diretamente
 """
@@ -129,14 +145,200 @@ Baseado nos resultados dos agentes especialistas, forneça uma resposta clara,
 concisa e útil ao usuário em português brasileiro.
 
 Seja direto e prático. Se houver alertas importantes (tarefas atrasadas, desvios de foco),
-destaque-os. Use emojis moderadamente para melhorar a legibilidade.
+destaque-os.
+Nunca invente tarefas, alertas, horários ou estados do sistema. Só mencione itens que
+apareçam explicitamente nos resultados recebidos. Se faltar dado, diga que não foi possível
+confirmar.
 Não mencione detalhes técnicos internos (IDs de banco, payloads JSON, etc.).
 """
+
+DIRECT_RESPONSE_PROMPT = """Você é um assistente de gestão pessoal.
+Responda em português, com objetividade.
+Nunca afirme estado do sistema, tarefas, alertas ou agenda sem dados explícitos no contexto.
+Se a pergunta depender do estado do sistema e ele não estiver disponível, diga que precisa verificar.
+"""
+
+
+def _context_history_text(context: Optional[dict]) -> str:
+    if not context:
+        return ""
+
+    history = context.get("chat_history", [])
+    if not isinstance(history, list):
+        return ""
+
+    lines = []
+    for item in history[-6:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role", "user")
+        content = str(item.get("content", "")).strip()
+        if not content:
+            continue
+        label = "Usuário" if role == "user" else "Assistente"
+        lines.append(f"{label}: {content}")
+    return "\n".join(lines)
+
+
+def _build_rule_based_route(
+    user_input: str, context: Optional[dict] = None
+) -> Optional[dict]:
+    history_text = _context_history_text(context)
+    combined = f"{history_text}\nUsuário: {user_input}".lower()
+
+    mentions_delay = bool(re.search(r"\batras\w*", combined))
+    mentions_alert = any(
+        term in combined
+        for term in (
+            "alerta",
+            "alertas",
+            "aviso",
+            "avisado",
+            "notificação",
+            "notificações",
+        )
+    )
+    mentions_focus = any(
+        term in combined for term in ("foco", "desvio", "on track", "fora do plano")
+    )
+    asks_status = any(
+        term in combined
+        for term in (
+            "como está",
+            "qual é o status",
+            "status atual",
+            "situação",
+            "meu sistema",
+        )
+    )
+    asks_next_step = any(
+        term in combined
+        for term in ("o que fazer", "como devo agir", "me ajude", "indique o que fazer")
+    )
+
+    if (
+        mentions_delay
+        or (mentions_alert and (asks_status or asks_next_step))
+        or (mentions_focus and asks_status)
+    ):
+        return {
+            "intent": "verificar atrasos, alertas e foco atual",
+            "handoffs": [
+                {"agent": "focus_guard", "payload": {"action": "force_check"}},
+                {"agent": "focus_guard", "payload": {"action": "get_alerts"}},
+                {"agent": "scheduler", "payload": {"action": "get_prioritized_tasks"}},
+            ],
+            "requires_user_input": False,
+            "clarification_question": None,
+        }
+
+    if asks_status and any(
+        term in combined for term in ("agenda", "tarefas", "tarefa", "foco", "sistema")
+    ):
+        return {
+            "intent": "status operacional do sistema",
+            "handoffs": [
+                {"agent": "focus_guard", "payload": {"action": "status"}},
+                {"agent": "focus_guard", "payload": {"action": "get_alerts"}},
+                {"agent": "scheduler", "payload": {"action": "get_today_schedule"}},
+                {"agent": "scheduler", "payload": {"action": "get_prioritized_tasks"}},
+            ],
+            "requires_user_input": False,
+            "clarification_question": None,
+        }
+
+    return None
+
+
+def _result_for(handoff_results: list[dict], agent: str, action: str) -> dict:
+    for item in handoff_results:
+        if item.get("agent") == agent and item.get("action") == action:
+            return item.get("result", {}) or {}
+    return {}
+
+
+def _format_focus_response(handoff_results: list[dict]) -> Optional[str]:
+    force_check = _result_for(handoff_results, "focus_guard", "force_check")
+    focus_status = _result_for(handoff_results, "focus_guard", "status")
+    alerts_result = _result_for(handoff_results, "focus_guard", "get_alerts")
+    tasks_result = _result_for(handoff_results, "scheduler", "get_prioritized_tasks")
+    schedule_result = _result_for(handoff_results, "scheduler", "get_today_schedule")
+
+    if not any(
+        (force_check, focus_status, alerts_result, tasks_result, schedule_result)
+    ):
+        return None
+
+    alerts = alerts_result.get("alerts", [])
+    prioritized_tasks = tasks_result.get("tasks", [])
+    blocks = schedule_result.get("blocks", [])
+
+    lines: list[str] = []
+
+    if force_check:
+        progress = force_check.get("progress", {})
+        load = progress.get("load", {})
+        overdue_blocks = progress.get("overdue_blocks", [])
+        analysis = force_check.get("analysis", {})
+        overdue_count = load.get("overdue", len(overdue_blocks))
+
+        if overdue_count:
+            lines.append(f"Encontrei {overdue_count} bloco(s) atrasado(s) no sistema.")
+            for block in overdue_blocks[:3]:
+                lines.append(
+                    f"{block.get('time_slot', '?')} | {block.get('task_title', 'Sem título')}"
+                )
+        else:
+            lines.append("Não encontrei bloco atrasado neste instante.")
+
+        if alerts:
+            latest = alerts[0]
+            lines.append(f"Há {len(alerts)} alerta(s) pendente(s).")
+            if latest.get("message"):
+                lines.append(f"Último alerta: {latest['message']}")
+        else:
+            lines.append("Não há alertas pendentes registrados.")
+
+        if analysis.get("recommendation"):
+            lines.append(f"Ação recomendada: {analysis['recommendation']}")
+        elif overdue_blocks:
+            first = overdue_blocks[0]
+            lines.append(
+                f"Ação recomendada: retome '{first.get('task_title', 'a tarefa atrasada')}' agora ou reprograme esse bloco antes de puxar outra frente."
+            )
+    else:
+        running = focus_status.get("running")
+        on_track = focus_status.get("on_track")
+        if running is not None:
+            lines.append(
+                f"Focus Guard: {'ativo' if running else 'desligado'} | "
+                f"{'no plano' if on_track else 'com desvio'}"
+            )
+        if alerts:
+            lines.append(f"Alertas pendentes: {len(alerts)}.")
+        else:
+            lines.append("Alertas pendentes: 0.")
+
+        if blocks:
+            completed = sum(1 for block in blocks if block.get("completed"))
+            lines.append(
+                f"Agenda de hoje: {completed}/{len(blocks)} blocos concluídos."
+            )
+
+    if prioritized_tasks:
+        top = prioritized_tasks[0]
+        label = top.get("title", "Sem título")
+        priority = top.get("priority", "Média")
+        status = top.get("status", "A fazer")
+        lines.append(f"Prioridade operacional agora: '{label}' [{priority}, {status}].")
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
 # Roteamento de intenção via LLM
 # ---------------------------------------------------------------------------
+
 
 def route_intent(user_input: str, context: Optional[dict] = None) -> dict:
     """
@@ -145,6 +347,15 @@ def route_intent(user_input: str, context: Optional[dict] = None) -> dict:
     Returns:
         Dict com 'intent', 'handoffs', 'requires_user_input', 'clarification_question'
     """
+    rule_based = _build_rule_based_route(user_input, context)
+    if rule_based:
+        notifier.agent_event(
+            f"Intent heurística: '{rule_based.get('intent', '?')}' | "
+            f"Handoffs: {[h['agent'] for h in rule_based.get('handoffs', [])]}",
+            AGENT_NAME,
+        )
+        return rule_based
+
     # Contexto adicional para o LLM (estado atual do sistema)
     system_context = {
         "current_time": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -199,10 +410,10 @@ Retorne o JSON de roteamento.""",
 # ---------------------------------------------------------------------------
 
 _AGENT_HANDLERS = {
-    "scheduler":    scheduler.handle_handoff,
-    "focus_guard":  focus_guard.handle_handoff,
-    "notion_sync":  notion_sync.handle_handoff,
-    "validator":    validator.handle_handoff,
+    "scheduler": scheduler.handle_handoff,
+    "focus_guard": focus_guard.handle_handoff,
+    "notion_sync": notion_sync.handle_handoff,
+    "validator": validator.handle_handoff,
     "retrospective": retrospective.handle_handoff,
     "calendar_sync": calendar_sync.handle_handoff,
 }
@@ -226,12 +437,14 @@ def execute_handoffs(handoffs: list[dict]) -> list[dict]:
         handler = _AGENT_HANDLERS.get(agent_name)
         if not handler:
             notifier.error(f"Agente '{agent_name}' não encontrado.", AGENT_NAME)
-            results.append({
-                "agent": agent_name,
-                "action": payload.get("action", "?"),
-                "status": "error",
-                "result": {"error": f"Agente '{agent_name}' não registrado."},
-            })
+            results.append(
+                {
+                    "agent": agent_name,
+                    "action": payload.get("action", "?"),
+                    "status": "error",
+                    "result": {"error": f"Agente '{agent_name}' não registrado."},
+                }
+            )
             continue
 
         notifier.agent_event(
@@ -243,12 +456,14 @@ def execute_handoffs(handoffs: list[dict]) -> list[dict]:
             payload["_context"] = accumulated_context
 
         response = handler(payload)
-        results.append({
-            "agent": agent_name,
-            "action": payload.get("action", "?"),
-            "status": response.get("status", "unknown"),
-            "result": response.get("result", {}),
-        })
+        results.append(
+            {
+                "agent": agent_name,
+                "action": payload.get("action", "?"),
+                "status": response.get("status", "unknown"),
+                "result": response.get("result", {}),
+            }
+        )
 
         # Acumula contexto para handoffs subsequentes
         accumulated_context[agent_name] = response.get("result", {})
@@ -260,21 +475,29 @@ def execute_handoffs(handoffs: list[dict]) -> list[dict]:
 # Síntese da resposta final
 # ---------------------------------------------------------------------------
 
+
 def synthesize_response(
     user_input: str,
     intent: str,
     handoff_results: list[dict],
+    context: Optional[dict] = None,
 ) -> str:
     """
     Usa o GPT-4o para sintetizar os resultados dos agentes em resposta natural.
     """
+    fast_path = _format_focus_response(handoff_results)
+    if fast_path:
+        return fast_path
+
     results_str = json.dumps(handoff_results, ensure_ascii=False, indent=2, default=str)
+    history_text = _context_history_text(context)
+    history_block = f"Histórico recente:\n{history_text}\n\n" if history_text else ""
 
     messages = [
         {"role": "system", "content": SYNTHESIS_PROMPT},
         {
             "role": "user",
-            "content": f"""Input original do usuário: "{user_input}"
+            "content": f"""{history_block}Input original do usuário: "{user_input}"
 Intenção detectada: {intent}
 
 Resultados dos agentes especialistas:
@@ -307,6 +530,7 @@ Forneça uma resposta útil e clara ao usuário.""",
 # Pipeline principal do Orchestrator
 # ---------------------------------------------------------------------------
 
+
 def process(user_input: str, context: Optional[dict] = None) -> str:
     """
     Pipeline completo: input → roteamento → execução → síntese → resposta.
@@ -319,14 +543,19 @@ def process(user_input: str, context: Optional[dict] = None) -> str:
         Resposta final em texto para exibir ao usuário.
     """
     notifier.separator(f"ORCHESTRATOR")
-    notifier.agent_event(f"Input recebido: \"{user_input[:80]}{'...' if len(user_input) > 80 else ''}\"", AGENT_NAME)
+    notifier.agent_event(
+        f'Input recebido: "{user_input[:80]}{"..." if len(user_input) > 80 else ""}"',
+        AGENT_NAME,
+    )
 
     # 1. Rotear intenção
     routing = route_intent(user_input, context)
 
     # 2. Verificar se precisa de mais informações
     if routing.get("requires_user_input"):
-        question = routing.get("clarification_question", "Pode detalhar sua solicitação?")
+        question = routing.get(
+            "clarification_question", "Pode detalhar sua solicitação?"
+        )
         notifier.warning(f"Preciso de mais informações: {question}", AGENT_NAME)
         return f"❓ {question}"
 
@@ -335,7 +564,7 @@ def process(user_input: str, context: Optional[dict] = None) -> str:
     if not handoffs:
         notifier.info("Nenhum agente necessário — respondendo diretamente.", AGENT_NAME)
         # Resposta direta sem agentes especialistas
-        return _direct_response(user_input)
+        return _direct_response(user_input, context)
 
     results = execute_handoffs(handoffs)
 
@@ -344,23 +573,29 @@ def process(user_input: str, context: Optional[dict] = None) -> str:
         user_input=user_input,
         intent=routing.get("intent", ""),
         handoff_results=results,
+        context=context,
     )
 
     notifier.separator()
     return response
 
 
-def _direct_response(user_input: str) -> str:
+def _direct_response(user_input: str, context: Optional[dict] = None) -> str:
     """Resposta direta do Orchestrator para perguntas simples sem agentes."""
+    history_text = _context_history_text(context)
+    history_block = f"Histórico recente:\n{history_text}\n\n" if history_text else ""
     try:
         response = _client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
                 {
                     "role": "system",
-                    "content": "Você é um assistente de gestão pessoal. Responda de forma concisa e útil em português.",
+                    "content": DIRECT_RESPONSE_PROMPT,
                 },
-                {"role": "user", "content": user_input},
+                {
+                    "role": "user",
+                    "content": f"{history_block}Pergunta atual: {user_input}",
+                },
             ],
             temperature=0.7,
         )
@@ -372,6 +607,7 @@ def _direct_response(user_input: str) -> str:
 # ---------------------------------------------------------------------------
 # Comandos rápidos do Orchestrator (shortcuts)
 # ---------------------------------------------------------------------------
+
 
 def quick_status() -> str:
     """Gera um status rápido completo do sistema."""
