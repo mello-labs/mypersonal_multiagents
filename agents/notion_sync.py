@@ -316,9 +316,40 @@ def sync_tasks_to_local() -> int:
             if nt["status"]:
                 memory.update_task_status(task_id, nt["status"])
             count += 1
+            _maybe_create_agenda_block(task_id, nt)
+        else:
+            # Tarefa já existe — garante bloco de agenda se tiver horário
+            _maybe_create_agenda_block(existing["id"], nt)
 
     notifier.success(f"Sincronização concluída: {count} tarefa(s) nova(s) importadas.", AGENT_NAME)
     return count
+
+
+def _maybe_create_agenda_block(task_id: int, nt: dict) -> None:
+    """Cria bloco de agenda hoje para tarefa com scheduled_time, sem duplicar."""
+    from datetime import date as _date
+    scheduled_time = (nt.get("scheduled_time") or "").strip()
+    status = (nt.get("status") or "A fazer")
+    if not scheduled_time or status == "Concluído":
+        return
+
+    today = _date.today().isoformat()
+    # Evita duplicata: verifica se já existe bloco com esse task_id hoje
+    existing_blocks = memory.get_today_agenda()
+    for b in existing_blocks:
+        if str(b.get("task_id")) == str(task_id):
+            return  # Já tem bloco para essa tarefa hoje
+
+    # Normaliza o horário para "HH:MM-HH:MM"
+    time_slot = _normalize_time_slot(scheduled_time)
+
+    memory.create_agenda_block(
+        date_str=today,
+        time_slot=time_slot,
+        task_title=nt.get("title") or "Sem título",
+        task_id=task_id,
+        notion_page_id=nt.get("notion_page_id"),
+    )
 
 
 def sync_local_task_to_notion(task_id: int) -> Optional[str]:
@@ -449,6 +480,7 @@ def sync_differential() -> int:
                 if nt["status"] and existing["status"] != nt["status"]:
                     memory.update_task_status(existing["id"], nt["status"])
                     count += 1
+                _maybe_create_agenda_block(existing["id"], nt)
             else:
                 task_id = memory.create_task(
                     title=nt["title"] or "Sem título",
@@ -459,6 +491,7 @@ def sync_differential() -> int:
                 if nt["status"]:
                     memory.update_task_status(task_id, nt["status"])
                 count += 1
+                _maybe_create_agenda_block(task_id, nt)
 
     memory.set_state("notion_last_sync_ts", datetime.now().isoformat())
     if count:
