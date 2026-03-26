@@ -13,16 +13,17 @@ import threading
 import uuid
 from collections import deque
 from contextlib import asynccontextmanager
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import BackgroundTasks, FastAPI, Form, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi import BackgroundTasks, FastAPI, Form, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from agents import focus_guard, notion_sync, orchestrator
+from agents import calendar_sync, focus_guard, notion_sync, orchestrator
 from config import LOG_FILE
 from core import memory
 
@@ -118,6 +119,45 @@ def _audit_ctx() -> dict:
     }
 
 
+def _normalize_range(start_date: str | None, end_date: str | None) -> tuple[str, str]:
+    today = date.today()
+    default_start = today - timedelta(days=7)
+    default_end = today + timedelta(days=7)
+    try:
+        start_dt = (
+            datetime.strptime(start_date, "%Y-%m-%d").date()
+            if start_date
+            else default_start
+        )
+        end_dt = (
+            datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else default_end
+        )
+    except ValueError:
+        return default_start.isoformat(), default_end.isoformat()
+
+    if end_dt < start_dt:
+        start_dt, end_dt = end_dt, start_dt
+    return start_dt.isoformat(), end_dt.isoformat()
+
+
+def _agenda_history_ctx(start_date: str | None, end_date: str | None) -> dict:
+    normalized_start, normalized_end = _normalize_range(start_date, end_date)
+    blocks = _safe(
+        lambda: memory.list_agenda_between(
+            normalized_start,
+            normalized_end,
+            include_rescheduled=True,
+        ),
+        [],
+    )
+    return {
+        "summary": _summary_ctx()["summary"],
+        "blocks": blocks,
+        "start_date": normalized_start,
+        "end_date": normalized_end,
+    }
+
+
 def _get_chat_session_id(request: Request) -> tuple[str, bool]:
     current = request.cookies.get(CHAT_SESSION_COOKIE)
     if current:
@@ -179,6 +219,50 @@ async def audit(request: Request):
     return templates.TemplateResponse(request, "audit.html", ctx)
 
 
+@app.get("/agenda", response_class=HTMLResponse)
+async def agenda(
+    request: Request,
+    start_date: str | None = Query(default=None),
+    end_date: str | None = Query(default=None),
+):
+    if request.headers.get("HX-Request") == "true":
+        if start_date or end_date:
+            normalized_start, normalized_end = _normalize_range(start_date, end_date)
+            blocks = _safe(
+                lambda: memory.list_agenda_between(
+                    normalized_start,
+                    normalized_end,
+                    include_rescheduled=True,
+                ),
+                [],
+            )
+        else:
+            blocks = _safe(memory.get_today_agenda, [])
+        return templates.TemplateResponse(
+            request,
+            "partials/agenda.html",
+            {"blocks": blocks},
+        )
+
+    ctx = _agenda_history_ctx(start_date, end_date)
+    ctx["page_name"] = "agenda"
+    return templates.TemplateResponse(request, "agenda.html", ctx)
+
+
+@app.get("/agenda/history", response_class=HTMLResponse)
+async def agenda_history_redirect(
+    start_date: str | None = Query(default=None),
+    end_date: str | None = Query(default=None),
+):
+    query_parts = []
+    if start_date:
+        query_parts.append(f"start_date={start_date}")
+    if end_date:
+        query_parts.append(f"end_date={end_date}")
+    query = f"?{'&'.join(query_parts)}" if query_parts else ""
+    return RedirectResponse(url=f"/agenda{query}", status_code=307)
+
+
 # ---------------------------------------------------------------------------
 # Partials HTMX
 # ---------------------------------------------------------------------------
@@ -219,13 +303,36 @@ async def status(request: Request):
     return templates.TemplateResponse(request, "partials/status.html", _summary_ctx())
 
 
-@app.get("/agenda", response_class=HTMLResponse)
-async def agenda(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "partials/agenda.html",
-        {"blocks": _safe(memory.get_today_agenda, [])},
+@app.post("/agenda/import", response_class=HTMLResponse)
+@app.post("/agenda/history/import", response_class=HTMLResponse)
+async def import_agenda_history(
+    request: Request,
+    source: str = Form(...),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+):
+    normalized_start, normalized_end = _normalize_range(start_date, end_date)
+    if source == "notion":
+        imported = await asyncio.to_thread(
+            notion_sync.sync_agenda_range_to_local,
+            normalized_start,
+            normalized_end,
+        )
+    elif source == "calendar":
+        imported = await asyncio.to_thread(
+            calendar_sync.import_events_range_as_blocks,
+            normalized_start,
+            normalized_end,
+        )
+    else:
+        imported = 0
+
+    ctx = _agenda_history_ctx(normalized_start, normalized_end)
+    ctx["page_name"] = "agenda"
+    ctx["import_msg"] = (
+        f"{imported} bloco(s) importado(s) de {source} entre {normalized_start} e {normalized_end}."
     )
+    return templates.TemplateResponse(request, "agenda.html", ctx)
 
 
 @app.get("/tasks", response_class=HTMLResponse)
@@ -291,15 +398,15 @@ async def sync(request: Request):
 @app.post("/block/{block_id}/complete", response_class=HTMLResponse)
 async def complete_block(request: Request, block_id: int):
     _safe(lambda: memory.mark_block_completed(block_id, True), None)
-    # Busca o bloco atualizado para swap cirúrgico
-    blocks = _safe(memory.get_today_agenda, [])
-    block = next((b for b in blocks if b["id"] == block_id), None)
+    block = _safe(lambda: memory.get_block(block_id), None)
     if block:
         return templates.TemplateResponse(
             request, "partials/block_row.html", {"b": block}
         )
     return templates.TemplateResponse(
-        request, "partials/agenda.html", {"blocks": blocks}
+        request,
+        "partials/agenda.html",
+        {"blocks": _safe(memory.get_today_agenda, [])},
     )
 
 

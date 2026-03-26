@@ -16,17 +16,17 @@
 #   GOOGLE_TOKEN_FILE        = caminho para token.json        (padrão: ./token.json)
 #   GOOGLE_CALENDAR_ID       = ID do calendário               (padrão: primary)
 
-import sys
 import os
-from datetime import datetime, date, timedelta
+import sys
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import (
+    GOOGLE_CALENDAR_ID,
     GOOGLE_CREDENTIALS_FILE,
     GOOGLE_TOKEN_FILE,
-    GOOGLE_CALENDAR_ID,
 )
 from core import memory, notifier
 
@@ -40,15 +40,16 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 # Autenticação OAuth
 # ---------------------------------------------------------------------------
 
+
 def _get_service():
     """
     Retorna o serviço autenticado da Google Calendar API.
     Requer google-api-python-client e google-auth-oauthlib instalados.
     """
     try:
+        from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import InstalledAppFlow
-        from google.auth.transport.requests import Request
         from googleapiclient.discovery import build
     except ImportError:
         raise RuntimeError(
@@ -71,7 +72,9 @@ def _get_service():
                     f"Arquivo de credenciais não encontrado: {GOOGLE_CREDENTIALS_FILE}\n"
                     "Baixe o credentials.json do Google Cloud Console."
                 )
-            flow = InstalledAppFlow.from_client_secrets_file(GOOGLE_CREDENTIALS_FILE, SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(
+                GOOGLE_CREDENTIALS_FILE, SCOPES
+            )
             creds = flow.run_local_server(port=0)
 
         # Salva token para próximas execuções
@@ -101,6 +104,7 @@ def is_authorized() -> bool:
 # Leitura de eventos
 # ---------------------------------------------------------------------------
 
+
 def _parse_event_time(event_time: dict) -> Optional[str]:
     """Extrai string de horário de um evento (dateTime ou date)."""
     if "dateTime" in event_time:
@@ -116,15 +120,26 @@ def fetch_today_events() -> list[dict]:
     Busca eventos do calendário de hoje.
     Retorna lista normalizada com time_slot, title, all_day, event_id.
     """
+    today = date.today().isoformat()
+    return fetch_events_range(today, today)
+
+
+def fetch_events_range(start_date: str, end_date: str) -> list[dict]:
+    """Busca eventos do Google Calendar em um intervalo de datas."""
     try:
         service = _get_service()
     except Exception as e:
-        notifier.warning(f"Não foi possível conectar ao Google Calendar: {e}", AGENT_NAME)
+        notifier.warning(
+            f"Não foi possível conectar ao Google Calendar: {e}", AGENT_NAME
+        )
         return []
 
-    today = date.today()
-    time_min = datetime.combine(today, datetime.min.time()).isoformat() + "Z"
-    time_max = datetime.combine(today + timedelta(days=1), datetime.min.time()).isoformat() + "Z"
+    start_dt, end_dt = _normalize_date_range(start_date, end_date)
+    time_min = datetime.combine(start_dt, datetime.min.time()).isoformat() + "Z"
+    time_max = (
+        datetime.combine(end_dt + timedelta(days=1), datetime.min.time()).isoformat()
+        + "Z"
+    )
 
     try:
         result = (
@@ -144,79 +159,59 @@ def fetch_today_events() -> list[dict]:
 
     events = []
     for ev in result.get("items", []):
+        start_raw = ev.get("start", {})
         start = _parse_event_time(ev.get("start", {}))
-        end   = _parse_event_time(ev.get("end", {}))
-        time_slot = f"{start}-{end}" if start and end and start != end else (start or "")
-        all_day = "dateTime" not in ev.get("start", {})
+        end = _parse_event_time(ev.get("end", {}))
+        time_slot = (
+            f"{start}-{end}" if start and end and start != end else (start or "")
+        )
+        all_day = "dateTime" not in start_raw
+        event_date = ""
+        if "dateTime" in start_raw:
+            event_date = datetime.fromisoformat(start_raw["dateTime"]).strftime(
+                "%Y-%m-%d"
+            )
+        elif "date" in start_raw:
+            event_date = start_raw["date"]
 
-        events.append({
-            "google_event_id": ev["id"],
-            "title":     ev.get("summary", "Sem título"),
-            "time_slot": time_slot,
-            "all_day":   all_day,
-            "location":  ev.get("location", ""),
-            "description": ev.get("description", ""),
-        })
+        events.append(
+            {
+                "google_event_id": ev["id"],
+                "title": ev.get("summary", "Sem título"),
+                "date": event_date,
+                "time_slot": time_slot,
+                "all_day": all_day,
+                "location": ev.get("location", ""),
+                "description": ev.get("description", ""),
+            }
+        )
 
-    notifier.info(f"Google Calendar: {len(events)} evento(s) hoje.", AGENT_NAME)
+    notifier.info(
+        f"Google Calendar: {len(events)} evento(s) entre {start_dt.isoformat()} e {end_dt.isoformat()}.",
+        AGENT_NAME,
+    )
     return events
 
 
 def fetch_week_events(days_ahead: int = 7) -> list[dict]:
     """Busca eventos dos próximos N dias."""
-    try:
-        service = _get_service()
-    except Exception as e:
-        notifier.warning(f"Google Calendar indisponível: {e}", AGENT_NAME)
-        return []
+    start_date = datetime.now().date().isoformat()
+    end_date = (datetime.now().date() + timedelta(days=days_ahead)).isoformat()
+    return fetch_events_range(start_date, end_date)
 
-    time_min = datetime.now().isoformat() + "Z"
-    time_max = (datetime.now() + timedelta(days=days_ahead)).isoformat() + "Z"
 
-    try:
-        result = (
-            service.events()
-            .list(
-                calendarId=GOOGLE_CALENDAR_ID,
-                timeMin=time_min,
-                timeMax=time_max,
-                singleEvents=True,
-                orderBy="startTime",
-                maxResults=50,
-            )
-            .execute()
-        )
-    except Exception as e:
-        notifier.error(f"Erro ao buscar eventos da semana: {e}", AGENT_NAME)
-        return []
-
-    events = []
-    for ev in result.get("items", []):
-        start_raw = ev.get("start", {})
-        start_time = _parse_event_time(start_raw)
-        end_time   = _parse_event_time(ev.get("end", {}))
-        time_slot  = f"{start_time}-{end_time}" if start_time and end_time else (start_time or "")
-
-        event_date = ""
-        if "dateTime" in start_raw:
-            event_date = datetime.fromisoformat(start_raw["dateTime"]).strftime("%Y-%m-%d")
-        elif "date" in start_raw:
-            event_date = start_raw["date"]
-
-        events.append({
-            "google_event_id": ev["id"],
-            "title":     ev.get("summary", "Sem título"),
-            "time_slot": time_slot,
-            "date":      event_date,
-            "all_day":   "dateTime" not in start_raw,
-        })
-
-    return events
+def _normalize_date_range(start_date: str, end_date: str) -> tuple[date, date]:
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+    if end_dt < start_dt:
+        start_dt, end_dt = end_dt, start_dt
+    return start_dt, end_dt
 
 
 # ---------------------------------------------------------------------------
 # Importar eventos como blocos de agenda
 # ---------------------------------------------------------------------------
+
 
 def import_today_as_blocks(skip_all_day: bool = True) -> int:
     """
@@ -224,14 +219,25 @@ def import_today_as_blocks(skip_all_day: bool = True) -> int:
     Evita duplicatas verificando se já existe um bloco com o mesmo time_slot + título.
     Retorna número de blocos criados.
     """
-    events = fetch_today_events()
+    today = date.today().isoformat()
+    return import_events_range_as_blocks(today, today, skip_all_day=skip_all_day)
+
+
+def import_events_range_as_blocks(
+    start_date: str,
+    end_date: str,
+    skip_all_day: bool = True,
+) -> int:
+    """Importa eventos do Google Calendar para blocos locais em um intervalo."""
+    events = fetch_events_range(start_date, end_date)
     if not events:
         return 0
 
-    today = date.today().isoformat()
-    existing_blocks = memory.get_today_agenda()
+    existing_blocks = memory.list_agenda_between(
+        start_date, end_date, include_rescheduled=True
+    )
     existing_keys = {
-        (b.get("time_slot", ""), b.get("task_title", ""))
+        (b.get("block_date", ""), b.get("time_slot", ""), b.get("task_title", ""))
         for b in existing_blocks
     }
 
@@ -240,21 +246,27 @@ def import_today_as_blocks(skip_all_day: bool = True) -> int:
         if skip_all_day and ev.get("all_day"):
             continue
 
-        key = (ev["time_slot"], ev["title"])
+        key = (ev.get("date", ""), ev["time_slot"], ev["title"])
         if key in existing_keys:
             continue  # Já existe
 
         memory.create_agenda_block(
-            block_date=today,
+            block_date=ev.get("date") or start_date,
             time_slot=ev["time_slot"],
             task_title=ev["title"],
         )
         existing_keys.add(key)
         created += 1
-        notifier.info(f"Bloco importado: {ev['time_slot']} — {ev['title']}", AGENT_NAME)
+        notifier.info(
+            f"Bloco importado: {ev.get('date', '?')} {ev['time_slot']} — {ev['title']}",
+            AGENT_NAME,
+        )
 
     if created:
-        notifier.success(f"{created} evento(s) do Google Calendar importados.", AGENT_NAME)
+        notifier.success(
+            f"{created} evento(s) do Google Calendar importados entre {start_date} e {end_date}.",
+            AGENT_NAME,
+        )
     else:
         notifier.info("Nenhum evento novo para importar.", AGENT_NAME)
 
@@ -264,6 +276,7 @@ def import_today_as_blocks(skip_all_day: bool = True) -> int:
 # ---------------------------------------------------------------------------
 # Exportar blocos para o Google Calendar
 # ---------------------------------------------------------------------------
+
 
 def export_block_to_calendar(
     block_date: str,
@@ -288,14 +301,15 @@ def export_block_to_calendar(
 
     start_str, end_str = time_slot.split("-", 1)
     start_dt = datetime.fromisoformat(f"{block_date}T{start_str.strip()}:00")
-    end_dt   = datetime.fromisoformat(f"{block_date}T{end_str.strip()}:00")
+    end_dt = datetime.fromisoformat(f"{block_date}T{end_str.strip()}:00")
 
     # Ajuste de fuso (usa o fuso local via isoformat)
     try:
         import tzlocal  # type: ignore
+
         local_tz = tzlocal.get_localzone()
         start_dt = start_dt.replace(tzinfo=local_tz)
-        end_dt   = end_dt.replace(tzinfo=local_tz)
+        end_dt = end_dt.replace(tzinfo=local_tz)
         tz_str = str(local_tz)
     except ImportError:
         tz_str = "America/Sao_Paulo"
@@ -304,13 +318,19 @@ def export_block_to_calendar(
         "summary": task_title,
         "description": description or "Criado pelo Multiagentes",
         "start": {"dateTime": start_dt.isoformat(), "timeZone": tz_str},
-        "end":   {"dateTime": end_dt.isoformat(),   "timeZone": tz_str},
+        "end": {"dateTime": end_dt.isoformat(), "timeZone": tz_str},
     }
 
     try:
-        created = service.events().insert(calendarId=GOOGLE_CALENDAR_ID, body=event_body).execute()
+        created = (
+            service.events()
+            .insert(calendarId=GOOGLE_CALENDAR_ID, body=event_body)
+            .execute()
+        )
         event_id = created["id"]
-        notifier.success(f"Evento criado no Calendar: '{task_title}' ({time_slot})", AGENT_NAME)
+        notifier.success(
+            f"Evento criado no Calendar: '{task_title}' ({time_slot})", AGENT_NAME
+        )
         return event_id
     except Exception as e:
         notifier.error(f"Erro ao criar evento: {e}", AGENT_NAME)
@@ -320,6 +340,7 @@ def export_block_to_calendar(
 # ---------------------------------------------------------------------------
 # Handoff entry point
 # ---------------------------------------------------------------------------
+
 
 def handle_handoff(payload: dict) -> dict:
     action = payload.get("action", "")
@@ -342,6 +363,18 @@ def handle_handoff(payload: dict) -> dict:
             days = payload.get("days_ahead", 7)
             events = fetch_week_events(days_ahead=days)
             result = {"events": events, "count": len(events)}
+
+        elif action == "fetch_range":
+            events = fetch_events_range(payload["start_date"], payload["end_date"])
+            result = {"events": events, "count": len(events)}
+
+        elif action == "import_range":
+            count = import_events_range_as_blocks(
+                payload["start_date"],
+                payload["end_date"],
+                skip_all_day=payload.get("skip_all_day", True),
+            )
+            result = {"imported": count, "message": f"{count} evento(s) importado(s)."}
 
         elif action == "export_block":
             event_id = export_block_to_calendar(

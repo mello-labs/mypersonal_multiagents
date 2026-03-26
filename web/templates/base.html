@@ -129,7 +129,9 @@
         height: calc(100vh - 49px);
         overflow: hidden;
       }
-      .audit-page .bento {
+      .audit-page .bento,
+      .agenda-page .bento,
+      .agenda-history-page .bento {
         height: auto;
         min-height: calc(100vh - 49px);
         overflow: auto;
@@ -712,6 +714,22 @@
       .subtle {
         color: var(--t2);
       }
+      .form-inline {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 10px 12px 0;
+      }
+      .input-date,
+      .sel-small {
+        background: var(--c2);
+        border: 1px solid var(--sep);
+        color: var(--text);
+        border-radius: var(--rs);
+        padding: 7px 10px;
+        font-size: 11px;
+        font-family: var(--font);
+      }
       .log-pane {
         flex: 1;
         overflow: auto;
@@ -768,6 +786,9 @@
       <div class="tb-pill"><span class="dot dot-green"></span> Guard</div>
       <button class="tb-btn" onclick="window.location.href = '/'">
         ⌂ Dashboard
+      </button>
+      <button class="tb-btn" onclick="window.location.href = '/agenda'">
+        ◷ Agenda
       </button>
       <button class="tb-btn" onclick="window.location.href = '/audit'">
         ▣ Audit

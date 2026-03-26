@@ -18,25 +18,29 @@
 #     - Tarefa vinculada (relation → Tarefas)
 #     - Concluído     (checkbox)
 
-import requests
-from datetime import datetime, date
-from typing import Optional, Any, List
-
-from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
-
-import sys
 import os
+import sys
+from datetime import date, datetime, timedelta
+from typing import Any, List, Optional
+
+import requests
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import (
-    NOTION_TOKEN,
-    NOTION_TASKS_DB_ID,
     NOTION_AGENDA_DB_ID,
     NOTION_API_BASE,
     NOTION_API_VERSION,
+    NOTION_TASKS_DB_ID,
+    NOTION_TOKEN,
 )
-from core import memory
-from core import notifier
+from core import memory, notifier
 
 AGENT_NAME = "notion_sync"
 
@@ -44,6 +48,7 @@ AGENT_NAME = "notion_sync"
 # ---------------------------------------------------------------------------
 # Cliente HTTP base
 # ---------------------------------------------------------------------------
+
 
 def _headers() -> dict:
     """Retorna os headers padrão para chamadas à Notion API."""
@@ -90,21 +95,27 @@ def _request(method: str, endpoint: str, data: Optional[dict] = None) -> dict:
 # Helpers para construir propriedades Notion
 # ---------------------------------------------------------------------------
 
+
 def _prop_title(text: str) -> dict:
     return {"title": [{"text": {"content": text}}]}
+
 
 def _prop_select(value: str) -> dict:
     return {"select": {"name": value}}
 
+
 def _prop_rich_text(text: str) -> dict:
     return {"rich_text": [{"text": {"content": text}}]}
+
 
 def _prop_date(date_str: str) -> dict:
     """date_str pode ser YYYY-MM-DD ou ISO datetime."""
     return {"date": {"start": date_str}}
 
+
 def _prop_checkbox(checked: bool) -> dict:
     return {"checkbox": checked}
+
 
 def _prop_relation(page_id: str) -> dict:
     return {"relation": [{"id": page_id}]}
@@ -113,6 +124,7 @@ def _prop_relation(page_id: str) -> dict:
 # ---------------------------------------------------------------------------
 # Operações em Tarefas
 # ---------------------------------------------------------------------------
+
 
 def create_notion_task(
     title: str,
@@ -126,7 +138,9 @@ def create_notion_task(
     Retorna o ID da página criada.
     """
     if not NOTION_TOKEN or not NOTION_TASKS_DB_ID:
-        notifier.warning("Notion não configurado — tarefa não sincronizada.", AGENT_NAME)
+        notifier.warning(
+            "Notion não configurado — tarefa não sincronizada.", AGENT_NAME
+        )
         return ""
 
     properties: dict[str, Any] = {
@@ -146,7 +160,9 @@ def create_notion_task(
 
     result = _request("POST", "pages", payload)
     page_id = result["id"]
-    notifier.success(f"Tarefa criada no Notion: '{title}' (ID: {page_id[:8]}...)", AGENT_NAME)
+    notifier.success(
+        f"Tarefa criada no Notion: '{title}' (ID: {page_id[:8]}...)", AGENT_NAME
+    )
     return page_id
 
 
@@ -164,7 +180,10 @@ def update_notion_task_status(
         properties["Horário real"] = _prop_rich_text(actual_time)
 
     _request("PATCH", f"pages/{notion_page_id}", {"properties": properties})
-    notifier.info(f"Status atualizado no Notion → {status} (página {notion_page_id[:8]}...)", AGENT_NAME)
+    notifier.info(
+        f"Status atualizado no Notion → {status} (página {notion_page_id[:8]}...)",
+        AGENT_NAME,
+    )
 
 
 def fetch_notion_tasks(filter_status: Optional[str] = None) -> list[dict]:
@@ -173,7 +192,9 @@ def fetch_notion_tasks(filter_status: Optional[str] = None) -> list[dict]:
     Retorna lista de dicts com campos normalizados.
     """
     if not NOTION_TOKEN or not NOTION_TASKS_DB_ID:
-        notifier.warning("Notion não configurado — leitura de tarefas impossível.", AGENT_NAME)
+        notifier.warning(
+            "Notion não configurado — leitura de tarefas impossível.", AGENT_NAME
+        )
         return []
 
     payload: dict[str, Any] = {"page_size": 100}
@@ -189,11 +210,11 @@ def fetch_notion_tasks(filter_status: Optional[str] = None) -> list[dict]:
         props = page.get("properties", {})
         task = {
             "notion_page_id": page["id"],
-            "title":          _extract_title(props.get("Nome")),
-            "status":         _extract_select(props.get("Status")),
-            "priority":       _extract_select(props.get("Prioridade")),
+            "title": _extract_title(props.get("Nome")),
+            "status": _extract_select(props.get("Status")),
+            "priority": _extract_select(props.get("Prioridade")),
             "scheduled_time": _extract_rich_text(props.get("Horário previsto")),
-            "actual_time":    _extract_rich_text(props.get("Horário real")),
+            "actual_time": _extract_rich_text(props.get("Horário real")),
         }
         tasks.append(task)
 
@@ -204,6 +225,7 @@ def fetch_notion_tasks(filter_status: Optional[str] = None) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Operações na Agenda Diária
 # ---------------------------------------------------------------------------
+
 
 def create_notion_agenda_block(
     block_date: str,
@@ -217,7 +239,9 @@ def create_notion_agenda_block(
     Retorna o ID da página criada.
     """
     if not NOTION_TOKEN or not NOTION_AGENDA_DB_ID:
-        notifier.warning("Notion não configurado — bloco de agenda não criado.", AGENT_NAME)
+        notifier.warning(
+            "Notion não configurado — bloco de agenda não criado.", AGENT_NAME
+        )
         return ""
 
     properties: dict[str, Any] = {
@@ -253,35 +277,53 @@ def mark_notion_agenda_block_done(notion_page_id: str, completed: bool = True) -
         {"properties": {"Concluído": _prop_checkbox(completed)}},
     )
     notifier.info(
-        f"Bloco de agenda {'concluído' if completed else 'reaberto'} no Notion.", AGENT_NAME
+        f"Bloco de agenda {'concluído' if completed else 'reaberto'} no Notion.",
+        AGENT_NAME,
     )
 
 
 def fetch_today_agenda_from_notion() -> list[dict]:
     """Lê os blocos de hoje da Agenda Diária no Notion."""
+    today = date.today().isoformat()
+    return fetch_agenda_range_from_notion(today, today)
+
+
+def fetch_agenda_range_from_notion(start_date: str, end_date: str) -> list[dict]:
+    """Lê blocos da Agenda Diária do Notion em um intervalo de datas."""
     if not NOTION_TOKEN or not NOTION_AGENDA_DB_ID:
         return []
 
-    today = date.today().isoformat()
+    start_dt, end_dt = _normalize_date_range(start_date, end_date)
     payload = {
-        "page_size": 50,
+        "page_size": 100,
         "filter": {
-            "property": "Data",
-            "date": {"equals": today},
+            "and": [
+                {"property": "Data", "date": {"on_or_after": start_dt}},
+                {"property": "Data", "date": {"on_or_before": end_dt}},
+            ]
         },
-        "sorts": [{"property": "Bloco horário", "direction": "ascending"}],
+        "sorts": [
+            {"property": "Data", "direction": "ascending"},
+            {"property": "Bloco horário", "direction": "ascending"},
+        ],
     }
 
     result = _request("POST", f"databases/{NOTION_AGENDA_DB_ID}/query", payload)
     blocks = []
     for page in result.get("results", []):
         props = page.get("properties", {})
-        blocks.append({
-            "notion_page_id": page["id"],
-            "date":           _extract_date(props.get("Data")),
-            "time_slot":      _extract_rich_text(props.get("Bloco horário")),
-            "completed":      _extract_checkbox(props.get("Concluído")),
-        })
+        block_text = _extract_rich_text(props.get("Bloco horário"))
+        time_slot, task_title = _split_agenda_block_text(block_text)
+        blocks.append(
+            {
+                "notion_page_id": page["id"],
+                "date": _extract_date(props.get("Data")),
+                "time_slot": time_slot,
+                "task_title": task_title,
+                "completed": _extract_checkbox(props.get("Concluído")),
+                "raw_block": block_text,
+            }
+        )
 
     return blocks
 
@@ -289,6 +331,7 @@ def fetch_today_agenda_from_notion() -> list[dict]:
 # ---------------------------------------------------------------------------
 # Sincronização bidirecional
 # ---------------------------------------------------------------------------
+
 
 def sync_tasks_to_local() -> int:
     """
@@ -321,15 +364,18 @@ def sync_tasks_to_local() -> int:
             # Tarefa já existe — garante bloco de agenda se tiver horário
             _maybe_create_agenda_block(existing["id"], nt)
 
-    notifier.success(f"Sincronização concluída: {count} tarefa(s) nova(s) importadas.", AGENT_NAME)
+    notifier.success(
+        f"Sincronização concluída: {count} tarefa(s) nova(s) importadas.", AGENT_NAME
+    )
     return count
 
 
 def _maybe_create_agenda_block(task_id: int, nt: dict) -> None:
     """Cria bloco de agenda hoje para tarefa com scheduled_time, sem duplicar."""
     from datetime import date as _date
+
     scheduled_time = (nt.get("scheduled_time") or "").strip()
-    status = (nt.get("status") or "A fazer")
+    status = nt.get("status") or "A fazer"
     if not scheduled_time or status == "Concluído":
         return
 
@@ -344,12 +390,55 @@ def _maybe_create_agenda_block(task_id: int, nt: dict) -> None:
     time_slot = _normalize_time_slot(scheduled_time)
 
     memory.create_agenda_block(
-        date_str=today,
+        block_date=today,
         time_slot=time_slot,
         task_title=nt.get("title") or "Sem título",
         task_id=task_id,
         notion_page_id=nt.get("notion_page_id"),
     )
+
+
+def sync_agenda_range_to_local(start_date: str, end_date: str) -> int:
+    """Importa blocos da Agenda Diária do Notion para o banco local."""
+    blocks = fetch_agenda_range_from_notion(start_date, end_date)
+    if not blocks:
+        return 0
+
+    local_blocks = memory.list_agenda_between(
+        start_date, end_date, include_rescheduled=True
+    )
+    existing_keys = {
+        (
+            block.get("block_date"),
+            block.get("time_slot"),
+            (block.get("task_title") or "").strip().lower(),
+        )
+        for block in local_blocks
+    }
+
+    created = 0
+    for block in blocks:
+        block_date = block.get("date") or start_date
+        task_title = block.get("task_title") or "Sem título"
+        key = (block_date, block.get("time_slot"), task_title.strip().lower())
+        if not block.get("time_slot") or key in existing_keys:
+            continue
+
+        memory.create_agenda_block(
+            block_date=block_date,
+            time_slot=block["time_slot"],
+            task_title=task_title,
+            notion_page_id=block.get("notion_page_id"),
+        )
+        existing_keys.add(key)
+        created += 1
+
+    if created:
+        notifier.success(
+            f"Agenda Notion: {created} bloco(s) importado(s) entre {start_date} e {end_date}.",
+            AGENT_NAME,
+        )
+    return created
 
 
 def sync_local_task_to_notion(task_id: int) -> Optional[str]:
@@ -388,11 +477,13 @@ def sync_local_task_to_notion(task_id: int) -> Optional[str]:
 # Helpers de extração de propriedades Notion
 # ---------------------------------------------------------------------------
 
+
 def _extract_title(prop: Optional[dict]) -> str:
     if not prop:
         return ""
     items = prop.get("title", [])
     return "".join(t.get("plain_text", "") for t in items)
+
 
 def _extract_select(prop: Optional[dict]) -> str:
     if not prop:
@@ -400,11 +491,13 @@ def _extract_select(prop: Optional[dict]) -> str:
     sel = prop.get("select")
     return sel.get("name", "") if sel else ""
 
+
 def _extract_rich_text(prop: Optional[dict]) -> str:
     if not prop:
         return ""
     items = prop.get("rich_text", [])
     return "".join(t.get("plain_text", "") for t in items)
+
 
 def _extract_date(prop: Optional[dict]) -> str:
     if not prop:
@@ -412,15 +505,47 @@ def _extract_date(prop: Optional[dict]) -> str:
     d = prop.get("date")
     return d.get("start", "") if d else ""
 
+
 def _extract_checkbox(prop: Optional[dict]) -> bool:
     if not prop:
         return False
     return bool(prop.get("checkbox", False))
 
 
+def _normalize_time_slot(value: str) -> str:
+    raw = value.strip()
+    if not raw:
+        return ""
+    if "-" in raw:
+        start_str, end_str = [part.strip() for part in raw.split("-", 1)]
+        return f"{start_str}-{end_str}"
+    try:
+        start_dt = datetime.strptime(raw, "%H:%M")
+        end_dt = start_dt + timedelta(hours=1)
+        return f"{start_dt.strftime('%H:%M')}-{end_dt.strftime('%H:%M')}"
+    except ValueError:
+        return raw
+
+
+def _split_agenda_block_text(raw_text: str) -> tuple[str, str]:
+    if "—" in raw_text:
+        left, right = raw_text.split("—", 1)
+        return left.strip(), right.strip() or "Sem título"
+    return raw_text.strip(), "Sem título"
+
+
+def _normalize_date_range(start_date: str, end_date: str) -> tuple[str, str]:
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+    if end_dt < start_dt:
+        start_dt, end_dt = end_dt, start_dt
+    return start_dt.isoformat(), end_dt.isoformat()
+
+
 # ---------------------------------------------------------------------------
 # Sincronização diferencial
 # ---------------------------------------------------------------------------
+
 
 def fetch_tasks_modified_since(last_sync_iso: str) -> list[dict]:
     """Puxa apenas tarefas modificadas após last_sync_iso (polling diferencial)."""
@@ -440,12 +565,12 @@ def fetch_tasks_modified_since(last_sync_iso: str) -> list[dict]:
     for page in result.get("results", []):
         props = page.get("properties", {})
         task = {
-            "notion_page_id":   page["id"],
-            "title":            _extract_title(props.get("Nome")),
-            "status":           _extract_select(props.get("Status")),
-            "priority":         _extract_select(props.get("Prioridade")),
-            "scheduled_time":   _extract_rich_text(props.get("Horário previsto")),
-            "actual_time":      _extract_rich_text(props.get("Horário real")),
+            "notion_page_id": page["id"],
+            "title": _extract_title(props.get("Nome")),
+            "status": _extract_select(props.get("Status")),
+            "priority": _extract_select(props.get("Prioridade")),
+            "scheduled_time": _extract_rich_text(props.get("Horário previsto")),
+            "actual_time": _extract_rich_text(props.get("Horário real")),
             "last_edited_time": page.get("last_edited_time", ""),
         }
         tasks.append(task)
@@ -472,7 +597,9 @@ def sync_differential() -> int:
         modified = fetch_tasks_modified_since(last_sync)
         count = 0
         all_local = memory.list_all_tasks()
-        local_by_notion_id = {lt["notion_page_id"]: lt for lt in all_local if lt.get("notion_page_id")}
+        local_by_notion_id = {
+            lt["notion_page_id"]: lt for lt in all_local if lt.get("notion_page_id")
+        }
 
         for nt in modified:
             existing = local_by_notion_id.get(nt["notion_page_id"])
@@ -495,7 +622,9 @@ def sync_differential() -> int:
 
     memory.set_state("notion_last_sync_ts", datetime.now().isoformat())
     if count:
-        notifier.success(f"Sync diferencial: {count} tarefa(s) processada(s).", AGENT_NAME)
+        notifier.success(
+            f"Sync diferencial: {count} tarefa(s) processada(s).", AGENT_NAME
+        )
     return count
 
 
@@ -503,11 +632,14 @@ def sync_differential() -> int:
 # Handoff entry point — chamado pelo Orchestrator
 # ---------------------------------------------------------------------------
 
+
 class HandoffPayload:
     """Estrutura de handoff padronizada para este agente."""
 
     @staticmethod
-    def create_task(title: str, priority: str = "Média", scheduled_time: str = "") -> dict:
+    def create_task(
+        title: str, priority: str = "Média", scheduled_time: str = ""
+    ) -> dict:
         return {
             "action": "create_task",
             "title": title,
@@ -547,7 +679,10 @@ def handle_handoff(payload: dict) -> dict:
                 priority=payload.get("priority", "Média"),
                 scheduled_time=payload.get("scheduled_time", ""),
             )
-            result = {"notion_page_id": page_id, "message": f"Tarefa '{payload['title']}' criada."}
+            result = {
+                "notion_page_id": page_id,
+                "message": f"Tarefa '{payload['title']}' criada.",
+            }
 
         elif action == "update_status":
             task = memory.get_task(payload["task_id"])
@@ -568,9 +703,25 @@ def handle_handoff(payload: dict) -> dict:
                 "total": len(blocks) or len(local_blocks),
             }
 
+        elif action == "sync_agenda_range":
+            start_date, end_date = _normalize_date_range(
+                payload["start_date"],
+                payload["end_date"],
+            )
+            count = sync_agenda_range_to_local(start_date, end_date)
+            result = {
+                "synced": count,
+                "message": f"{count} bloco(s) de agenda importado(s).",
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+
         elif action == "sync_differential":
             count = sync_differential()
-            result = {"synced": count, "message": f"{count} tarefa(s) atualizada(s) pelo sync diferencial."}
+            result = {
+                "synced": count,
+                "message": f"{count} tarefa(s) atualizada(s) pelo sync diferencial.",
+            }
 
         else:
             raise ValueError(f"Ação desconhecida: '{action}'")

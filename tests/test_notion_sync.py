@@ -2,15 +2,17 @@
 test_notion_sync.py — Testes do agente notion_sync com requests mockado.
 Não faz chamadas reais à Notion API.
 """
+
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 def _mock_response(status_code: int, json_data: dict, text: str = "") -> MagicMock:
     """Helper para criar um mock de requests.Response."""
     mock = MagicMock()
     mock.status_code = status_code
-    mock.ok = (200 <= status_code < 300)
+    mock.ok = 200 <= status_code < 300
     mock.json.return_value = json_data
     mock.text = text or str(json_data)
     return mock
@@ -19,6 +21,7 @@ def _mock_response(status_code: int, json_data: dict, text: str = "") -> MagicMo
 # =============================================================================
 # _request — retry e erros
 # =============================================================================
+
 
 class TestRequest:
     def test_request_sucesso(self):
@@ -54,7 +57,7 @@ class TestRequest:
 
     def test_request_retry_esgotado_levanta_erro(self):
         """Após 4 tentativas com 429, deve levantar _NotionRateLimitError."""
-        from agents.notion_sync import _request, _NotionRateLimitError
+        from agents.notion_sync import _NotionRateLimitError, _request
 
         rate_limited = _mock_response(429, {}, "Too Many Requests")
 
@@ -67,6 +70,7 @@ class TestRequest:
 # =============================================================================
 # fetch_notion_tasks — parsing da resposta
 # =============================================================================
+
 
 class TestFetchNotionTasks:
     def test_fetch_retorna_lista_vazia(self):
@@ -85,21 +89,11 @@ class TestFetchNotionTasks:
                 {
                     "id": "page-id-abc",
                     "properties": {
-                        "Nome": {
-                            "title": [{"plain_text": "Minha tarefa"}]
-                        },
-                        "Status": {
-                            "select": {"name": "Em progresso"}
-                        },
-                        "Prioridade": {
-                            "select": {"name": "Alta"}
-                        },
-                        "Horário previsto": {
-                            "rich_text": [{"plain_text": "09:00"}]
-                        },
-                        "Horário real": {
-                            "rich_text": []
-                        },
+                        "Nome": {"title": [{"plain_text": "Minha tarefa"}]},
+                        "Status": {"select": {"name": "Em progresso"}},
+                        "Prioridade": {"select": {"name": "Alta"}},
+                        "Horário previsto": {"rich_text": [{"plain_text": "09:00"}]},
+                        "Horário real": {"rich_text": []},
                     },
                 }
             ]
@@ -120,6 +114,7 @@ class TestFetchNotionTasks:
 # =============================================================================
 # create_notion_task — payload enviado
 # =============================================================================
+
 
 class TestCreateNotionTask:
     def test_create_task_envia_payload_correto(self):
@@ -143,7 +138,10 @@ class TestCreateNotionTask:
         assert call_args[0][1].endswith("/pages")
 
         payload = call_args[1]["json"]
-        assert payload["properties"]["Nome"]["title"][0]["text"]["content"] == "Nova tarefa"
+        assert (
+            payload["properties"]["Nome"]["title"][0]["text"]["content"]
+            == "Nova tarefa"
+        )
         assert payload["properties"]["Status"]["select"]["name"] == "A fazer"
         assert payload["properties"]["Prioridade"]["select"]["name"] == "Alta"
 
@@ -154,3 +152,48 @@ class TestCreateNotionTask:
             page_id = notion_sync.create_notion_task("Tarefa sem token")
 
         assert page_id == ""
+
+
+class TestAgendaSync:
+    def test_maybe_create_agenda_block_cria_bloco_local(self, mem):
+        from agents import notion_sync
+
+        notion_sync._maybe_create_agenda_block(
+            7,
+            {
+                "title": "Planejamento",
+                "status": "A fazer",
+                "scheduled_time": "09:00",
+                "notion_page_id": "page-123",
+            },
+        )
+
+        blocos = mem.get_today_agenda()
+        assert len(blocos) == 1
+        assert blocos[0]["task_title"] == "Planejamento"
+        assert blocos[0]["task_id"] == 7
+        assert blocos[0]["notion_page_id"] == "page-123"
+
+    def test_sync_agenda_range_to_local_importa_blocos(self, mem):
+        from agents import notion_sync
+
+        with patch.object(
+            notion_sync,
+            "fetch_agenda_range_from_notion",
+            return_value=[
+                {
+                    "notion_page_id": "agenda-1",
+                    "date": "2026-03-20",
+                    "time_slot": "09:00-10:00",
+                    "task_title": "Review",
+                    "completed": False,
+                    "raw_block": "09:00-10:00 — Review",
+                }
+            ],
+        ):
+            count = notion_sync.sync_agenda_range_to_local("2026-03-20", "2026-03-20")
+
+        assert count == 1
+        blocos = mem.get_agenda_for_date("2026-03-20")
+        assert len(blocos) == 1
+        assert blocos[0]["task_title"] == "Review"

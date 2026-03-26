@@ -39,7 +39,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import redis as redis_lib
@@ -110,17 +110,17 @@ def _r() -> redis_lib.Redis:
 
 
 def _now() -> str:
-    return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def _ts(dt_str: Optional[str] = None) -> float:
     """Converte string ISO para unix timestamp (score do ZSET)."""
     if dt_str is None:
-        return datetime.utcnow().timestamp()
+        return datetime.now(timezone.utc).timestamp()
     try:
         return datetime.fromisoformat(dt_str).timestamp()
     except Exception:
-        return datetime.utcnow().timestamp()
+        return datetime.now(timezone.utc).timestamp()
 
 
 def _ts_from_timeslot(time_slot: str) -> float:
@@ -331,6 +331,7 @@ def get_agenda_for_date(
                     data,
                     int_fields=[
                         "id",
+                        "task_id",
                         "completed",
                         "rescheduled",
                         "rescheduled_to_block_id",
@@ -339,6 +340,32 @@ def get_agenda_for_date(
                     ],
                 )
             )
+    return blocks
+
+
+def list_agenda_between(
+    start_date: str,
+    end_date: str,
+    include_rescheduled: bool = False,
+) -> list[dict]:
+    try:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        return []
+
+    if end_dt < start_dt:
+        start_dt, end_dt = end_dt, start_dt
+
+    blocks = []
+    cursor = start_dt
+    while cursor <= end_dt:
+        blocks.extend(
+            get_agenda_for_date(
+                cursor.isoformat(), include_rescheduled=include_rescheduled
+            )
+        )
+        cursor += timedelta(days=1)
     return blocks
 
 
@@ -351,6 +378,7 @@ def get_block(block_id: int) -> Optional[dict]:
         data,
         int_fields=[
             "id",
+            "task_id",
             "completed",
             "rescheduled",
             "rescheduled_to_block_id",

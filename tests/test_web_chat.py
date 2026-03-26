@@ -60,3 +60,94 @@ def test_audit_page_exibe_eventos_alertas_handoffs_e_logs(mem, monkeypatch, tmp_
     assert "Atraso detectado" in response.text
     assert "orchestrator → scheduler" in response.text
     assert "linha 2 do log" in response.text
+
+
+def test_agenda_page_exibe_intervalo(mem, monkeypatch):
+    monkeypatch.setattr(web_app.focus_guard, "start_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "stop_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "is_running", lambda: False)
+
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    web_app.memory._redis_client = fake
+    web_app.memory.create_agenda_block("2026-03-20", "09:00-10:00", "Histórico passado")
+    web_app.memory.create_agenda_block("2026-03-22", "10:00-11:00", "Histórico futuro")
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/agenda",
+            params={"start_date": "2026-03-20", "end_date": "2026-03-22"},
+        )
+
+    assert response.status_code == 200
+    assert "Agenda Navegável" in response.text
+    assert "Histórico passado" in response.text
+    assert "Histórico futuro" in response.text
+
+
+def test_agenda_history_redirect_preserva_intervalo(mem, monkeypatch):
+    monkeypatch.setattr(web_app.focus_guard, "start_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "stop_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "is_running", lambda: False)
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/agenda/history",
+            params={"start_date": "2026-03-20", "end_date": "2026-03-22"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 307
+    assert (
+        response.headers["location"]
+        == "/agenda?start_date=2026-03-20&end_date=2026-03-22"
+    )
+
+
+def test_agenda_import_notion_usa_intervalo(mem, monkeypatch):
+    monkeypatch.setattr(web_app.focus_guard, "start_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "stop_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "is_running", lambda: False)
+    monkeypatch.setattr(
+        web_app.notion_sync,
+        "sync_agenda_range_to_local",
+        lambda start_date, end_date: 3,
+    )
+
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    web_app.memory._redis_client = fake
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/agenda/import",
+            data={
+                "source": "notion",
+                "start_date": "2026-03-20",
+                "end_date": "2026-03-22",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "3 bloco(s) importado(s) de notion" in response.text
+
+
+def test_agenda_partial_htmx_retorna_blocos_do_intervalo(mem, monkeypatch):
+    monkeypatch.setattr(web_app.focus_guard, "start_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "stop_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "is_running", lambda: False)
+
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    web_app.memory._redis_client = fake
+    web_app.memory.create_agenda_block("2026-03-20", "09:00-10:00", "Bloco A")
+    web_app.memory.create_agenda_block("2026-03-22", "10:00-11:00", "Bloco B")
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/agenda",
+            params={"start_date": "2026-03-20", "end_date": "2026-03-22"},
+            headers={"HX-Request": "true"},
+        )
+
+    assert response.status_code == 200
+    assert "Bloco A" in response.text
+    assert "Bloco B" in response.text
+    assert "Agenda Navegável" not in response.text
