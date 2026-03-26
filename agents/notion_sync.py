@@ -1,0 +1,451 @@
+# =============================================================================
+# agents/notion_sync.py — Agente de sincronização com o Notion
+# =============================================================================
+# Usa a Notion REST API diretamente (requests + token).
+# Responsável por criar/atualizar páginas nos databases "Tarefas" e "Agenda Diária".
+#
+# Databases esperados no Notion:
+#   Tarefas:
+#     - Nome          (title)
+#     - Status        (select): "A fazer" | "Em progresso" | "Concluído"
+#     - Prioridade    (select): "Alta" | "Média" | "Baixa"
+#     - Horário previsto (rich_text)
+#     - Horário real     (rich_text)
+#
+#   Agenda Diária:
+#     - Data          (date)
+#     - Bloco horário (rich_text)
+#     - Tarefa vinculada (relation → Tarefas)
+#     - Concluído     (checkbox)
+
+import requests
+from datetime import datetime, date
+from typing import Optional, Any
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from config import (
+    NOTION_TOKEN,
+    NOTION_TASKS_DB_ID,
+    NOTION_AGENDA_DB_ID,
+    NOTION_API_BASE,
+    NOTION_API_VERSION,
+)
+from core import memory
+from core import notifier
+
+AGENT_NAME = "notion_sync"
+
+
+# ---------------------------------------------------------------------------
+# Cliente HTTP base
+# ---------------------------------------------------------------------------
+
+def _headers() -> dict:
+    """Retorna os headers padrão para chamadas à Notion API."""
+    return {
+        "Authorization": f"Bearer {NOTION_TOKEN}",
+        "Content-Type": "application/json",
+        "Notion-Version": NOTION_API_VERSION,
+    }
+
+
+def _request(method: str, endpoint: str, data: Optional[dict] = None) -> dict:
+    """
+    Faz uma requisição à Notion API.
+    Levanta RuntimeError em caso de falha HTTP.
+    """
+    url = f"{NOTION_API_BASE}/{endpoint.lstrip('/')}"
+    response = requests.request(method, url, headers=_headers(), json=data, timeout=15)
+
+    if not response.ok:
+        error_body = response.text[:500]
+        raise RuntimeError(
+            f"Notion API erro {response.status_code} em {method} {endpoint}: {error_body}"
+        )
+    return response.json()
+
+
+# ---------------------------------------------------------------------------
+# Helpers para construir propriedades Notion
+# ---------------------------------------------------------------------------
+
+def _prop_title(text: str) -> dict:
+    return {"title": [{"text": {"content": text}}]}
+
+def _prop_select(value: str) -> dict:
+    return {"select": {"name": value}}
+
+def _prop_rich_text(text: str) -> dict:
+    return {"rich_text": [{"text": {"content": text}}]}
+
+def _prop_date(date_str: str) -> dict:
+    """date_str pode ser YYYY-MM-DD ou ISO datetime."""
+    return {"date": {"start": date_str}}
+
+def _prop_checkbox(checked: bool) -> dict:
+    return {"checkbox": checked}
+
+def _prop_relation(page_id: str) -> dict:
+    return {"relation": [{"id": page_id}]}
+
+
+# ---------------------------------------------------------------------------
+# Operações em Tarefas
+# ---------------------------------------------------------------------------
+
+def create_notion_task(
+    title: str,
+    status: str = "A fazer",
+    priority: str = "Média",
+    scheduled_time: Optional[str] = None,
+    actual_time: Optional[str] = None,
+) -> str:
+    """
+    Cria uma nova página no database Tarefas do Notion.
+    Retorna o ID da página criada.
+    """
+    if not NOTION_TOKEN or not NOTION_TASKS_DB_ID:
+        notifier.warning("Notion não configurado — tarefa não sincronizada.", AGENT_NAME)
+        return ""
+
+    properties: dict[str, Any] = {
+        "Nome": _prop_title(title),
+        "Status": _prop_select(status),
+        "Prioridade": _prop_select(priority),
+    }
+    if scheduled_time:
+        properties["Horário previsto"] = _prop_rich_text(scheduled_time)
+    if actual_time:
+        properties["Horário real"] = _prop_rich_text(actual_time)
+
+    payload = {
+        "parent": {"database_id": NOTION_TASKS_DB_ID},
+        "properties": properties,
+    }
+
+    result = _request("POST", "pages", payload)
+    page_id = result["id"]
+    notifier.success(f"Tarefa criada no Notion: '{title}' (ID: {page_id[:8]}...)", AGENT_NAME)
+    return page_id
+
+
+def update_notion_task_status(
+    notion_page_id: str,
+    status: str,
+    actual_time: Optional[str] = None,
+) -> None:
+    """Atualiza o status (e horário real) de uma tarefa no Notion."""
+    if not NOTION_TOKEN or not notion_page_id:
+        return
+
+    properties: dict[str, Any] = {"Status": _prop_select(status)}
+    if actual_time:
+        properties["Horário real"] = _prop_rich_text(actual_time)
+
+    _request("PATCH", f"pages/{notion_page_id}", {"properties": properties})
+    notifier.info(f"Status atualizado no Notion → {status} (página {notion_page_id[:8]}...)", AGENT_NAME)
+
+
+def fetch_notion_tasks(filter_status: Optional[str] = None) -> list[dict]:
+    """
+    Lê todas as tarefas do Notion (com filtro opcional por status).
+    Retorna lista de dicts com campos normalizados.
+    """
+    if not NOTION_TOKEN or not NOTION_TASKS_DB_ID:
+        notifier.warning("Notion não configurado — leitura de tarefas impossível.", AGENT_NAME)
+        return []
+
+    payload: dict[str, Any] = {"page_size": 100}
+    if filter_status:
+        payload["filter"] = {
+            "property": "Status",
+            "select": {"equals": filter_status},
+        }
+
+    result = _request("POST", f"databases/{NOTION_TASKS_DB_ID}/query", payload)
+    tasks = []
+    for page in result.get("results", []):
+        props = page.get("properties", {})
+        task = {
+            "notion_page_id": page["id"],
+            "title":          _extract_title(props.get("Nome")),
+            "status":         _extract_select(props.get("Status")),
+            "priority":       _extract_select(props.get("Prioridade")),
+            "scheduled_time": _extract_rich_text(props.get("Horário previsto")),
+            "actual_time":    _extract_rich_text(props.get("Horário real")),
+        }
+        tasks.append(task)
+
+    notifier.info(f"Lidas {len(tasks)} tarefas do Notion.", AGENT_NAME)
+    return tasks
+
+
+# ---------------------------------------------------------------------------
+# Operações na Agenda Diária
+# ---------------------------------------------------------------------------
+
+def create_notion_agenda_block(
+    block_date: str,
+    time_slot: str,
+    task_title: str,
+    notion_task_page_id: Optional[str] = None,
+    completed: bool = False,
+) -> str:
+    """
+    Cria um bloco na Agenda Diária do Notion.
+    Retorna o ID da página criada.
+    """
+    if not NOTION_TOKEN or not NOTION_AGENDA_DB_ID:
+        notifier.warning("Notion não configurado — bloco de agenda não criado.", AGENT_NAME)
+        return ""
+
+    properties: dict[str, Any] = {
+        "Data": _prop_date(block_date),
+        "Bloco horário": _prop_rich_text(f"{time_slot} — {task_title}"),
+        "Concluído": _prop_checkbox(completed),
+    }
+
+    # Se temos o ID da tarefa no Notion, criamos a relação
+    if notion_task_page_id:
+        properties["Tarefa vinculada"] = _prop_relation(notion_task_page_id)
+
+    payload = {
+        "parent": {"database_id": NOTION_AGENDA_DB_ID},
+        "properties": properties,
+    }
+
+    result = _request("POST", "pages", payload)
+    page_id = result["id"]
+    notifier.success(
+        f"Bloco de agenda criado: {block_date} {time_slot} → '{task_title}'", AGENT_NAME
+    )
+    return page_id
+
+
+def mark_notion_agenda_block_done(notion_page_id: str, completed: bool = True) -> None:
+    """Marca um bloco de agenda como concluído no Notion."""
+    if not NOTION_TOKEN or not notion_page_id:
+        return
+    _request(
+        "PATCH",
+        f"pages/{notion_page_id}",
+        {"properties": {"Concluído": _prop_checkbox(completed)}},
+    )
+    notifier.info(
+        f"Bloco de agenda {'concluído' if completed else 'reaberto'} no Notion.", AGENT_NAME
+    )
+
+
+def fetch_today_agenda_from_notion() -> list[dict]:
+    """Lê os blocos de hoje da Agenda Diária no Notion."""
+    if not NOTION_TOKEN or not NOTION_AGENDA_DB_ID:
+        return []
+
+    today = date.today().isoformat()
+    payload = {
+        "page_size": 50,
+        "filter": {
+            "property": "Data",
+            "date": {"equals": today},
+        },
+        "sorts": [{"property": "Bloco horário", "direction": "ascending"}],
+    }
+
+    result = _request("POST", f"databases/{NOTION_AGENDA_DB_ID}/query", payload)
+    blocks = []
+    for page in result.get("results", []):
+        props = page.get("properties", {})
+        blocks.append({
+            "notion_page_id": page["id"],
+            "date":           _extract_date(props.get("Data")),
+            "time_slot":      _extract_rich_text(props.get("Bloco horário")),
+            "completed":      _extract_checkbox(props.get("Concluído")),
+        })
+
+    return blocks
+
+
+# ---------------------------------------------------------------------------
+# Sincronização bidirecional
+# ---------------------------------------------------------------------------
+
+def sync_tasks_to_local() -> int:
+    """
+    Puxa tarefas do Notion e insere/atualiza no banco local.
+    Retorna quantas tarefas foram sincronizadas.
+    """
+    notion_tasks = fetch_notion_tasks()
+    count = 0
+    for nt in notion_tasks:
+        # Verifica se já existe localmente pela page_id
+        existing = None
+        all_local = memory.list_all_tasks()
+        for lt in all_local:
+            if lt.get("notion_page_id") == nt["notion_page_id"]:
+                existing = lt
+                break
+
+        if not existing:
+            task_id = memory.create_task(
+                title=nt["title"] or "Sem título",
+                priority=nt["priority"] or "Média",
+                scheduled_time=nt["scheduled_time"],
+                notion_page_id=nt["notion_page_id"],
+            )
+            if nt["status"]:
+                memory.update_task_status(task_id, nt["status"])
+            count += 1
+
+    notifier.success(f"Sincronização concluída: {count} tarefa(s) nova(s) importadas.", AGENT_NAME)
+    return count
+
+
+def sync_local_task_to_notion(task_id: int) -> Optional[str]:
+    """
+    Envia uma tarefa local para o Notion (cria ou atualiza).
+    Retorna o notion_page_id.
+    """
+    task = memory.get_task(task_id)
+    if not task:
+        notifier.error(f"Tarefa {task_id} não encontrada.", AGENT_NAME)
+        return None
+
+    if task.get("notion_page_id"):
+        # Atualiza
+        update_notion_task_status(
+            task["notion_page_id"],
+            task["status"],
+            task.get("actual_time"),
+        )
+        return task["notion_page_id"]
+    else:
+        # Cria
+        page_id = create_notion_task(
+            title=task["title"],
+            status=task["status"],
+            priority=task["priority"],
+            scheduled_time=task.get("scheduled_time"),
+            actual_time=task.get("actual_time"),
+        )
+        if page_id:
+            memory.update_task_notion_id(task_id, page_id)
+        return page_id
+
+
+# ---------------------------------------------------------------------------
+# Helpers de extração de propriedades Notion
+# ---------------------------------------------------------------------------
+
+def _extract_title(prop: Optional[dict]) -> str:
+    if not prop:
+        return ""
+    items = prop.get("title", [])
+    return "".join(t.get("plain_text", "") for t in items)
+
+def _extract_select(prop: Optional[dict]) -> str:
+    if not prop:
+        return ""
+    sel = prop.get("select")
+    return sel.get("name", "") if sel else ""
+
+def _extract_rich_text(prop: Optional[dict]) -> str:
+    if not prop:
+        return ""
+    items = prop.get("rich_text", [])
+    return "".join(t.get("plain_text", "") for t in items)
+
+def _extract_date(prop: Optional[dict]) -> str:
+    if not prop:
+        return ""
+    d = prop.get("date")
+    return d.get("start", "") if d else ""
+
+def _extract_checkbox(prop: Optional[dict]) -> bool:
+    if not prop:
+        return False
+    return bool(prop.get("checkbox", False))
+
+
+# ---------------------------------------------------------------------------
+# Handoff entry point — chamado pelo Orchestrator
+# ---------------------------------------------------------------------------
+
+class HandoffPayload:
+    """Estrutura de handoff padronizada para este agente."""
+
+    @staticmethod
+    def create_task(title: str, priority: str = "Média", scheduled_time: str = "") -> dict:
+        return {
+            "action": "create_task",
+            "title": title,
+            "priority": priority,
+            "scheduled_time": scheduled_time,
+        }
+
+    @staticmethod
+    def update_status(task_id: int, status: str) -> dict:
+        return {"action": "update_status", "task_id": task_id, "status": status}
+
+    @staticmethod
+    def sync_from_notion() -> dict:
+        return {"action": "sync_from_notion"}
+
+    @staticmethod
+    def get_today_agenda() -> dict:
+        return {"action": "get_today_agenda"}
+
+
+def handle_handoff(payload: dict) -> dict:
+    """
+    Ponto de entrada para handoffs do Orchestrator.
+    Retorna dict com 'status' e 'result'.
+    """
+    action = payload.get("action", "")
+    notifier.agent_event(f"Recebendo handoff: action='{action}'", AGENT_NAME)
+
+    handoff_id = memory.log_handoff("orchestrator", AGENT_NAME, action, payload)
+
+    try:
+        result = {}
+
+        if action == "create_task":
+            page_id = create_notion_task(
+                title=payload["title"],
+                priority=payload.get("priority", "Média"),
+                scheduled_time=payload.get("scheduled_time", ""),
+            )
+            result = {"notion_page_id": page_id, "message": f"Tarefa '{payload['title']}' criada."}
+
+        elif action == "update_status":
+            task = memory.get_task(payload["task_id"])
+            if task and task.get("notion_page_id"):
+                update_notion_task_status(task["notion_page_id"], payload["status"])
+            result = {"message": f"Status atualizado para '{payload['status']}'."}
+
+        elif action == "sync_from_notion":
+            count = sync_tasks_to_local()
+            result = {"synced": count, "message": f"{count} tarefa(s) importada(s)."}
+
+        elif action == "get_today_agenda":
+            blocks = fetch_today_agenda_from_notion()
+            local_blocks = memory.get_today_agenda()
+            result = {
+                "notion_blocks": blocks,
+                "local_blocks": local_blocks,
+                "total": len(blocks) or len(local_blocks),
+            }
+
+        else:
+            raise ValueError(f"Ação desconhecida: '{action}'")
+
+        memory.update_handoff_result(handoff_id, result, "success")
+        return {"status": "success", "result": result}
+
+    except Exception as exc:
+        error_msg = str(exc)
+        notifier.error(f"Erro no handoff '{action}': {error_msg}", AGENT_NAME)
+        memory.update_handoff_result(handoff_id, {"error": error_msg}, "error")
+        return {"status": "error", "result": {"error": error_msg}}

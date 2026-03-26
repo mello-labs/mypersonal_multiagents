@@ -1,0 +1,396 @@
+# =============================================================================
+# agents/focus_guard.py — Agente guardião do foco
+# =============================================================================
+# Roda em background thread e periodicamente:
+#   1. Verifica se há uma sessão de foco ativa
+#   2. Compara o que foi planejado vs. o que foi feito
+#   3. Emite alertas/cobranças no terminal
+#   4. Registra desvios no banco de dados
+#
+# O loop principal usa a lib `schedule` para disparos periódicos.
+# A thread roda como daemon e é parada por um Event.
+
+import threading
+import time
+import json
+import sys
+import os
+from datetime import datetime, date
+from typing import Optional
+
+import schedule
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from openai import OpenAI
+from config import OPENAI_API_KEY, OPENAI_MODEL, FOCUS_CHECK_INTERVAL_MINUTES
+from core import memory, notifier
+
+AGENT_NAME = "focus_guard"
+_client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Estado interno do Focus Guard
+_state_key = "focus_guard_state"
+_stop_event = threading.Event()
+_guard_thread: Optional[threading.Thread] = None
+
+
+# Prompt para análise de desvio via LLM
+DEVIATION_PROMPT = """Você é o Focus Guard, um agente que monitora o progresso de tarefas pessoais.
+Analise os dados fornecidos e determine:
+1. Se o usuário está dentro do plano (on-track) ou desviou
+2. Se houve desvio, qual a gravidade (leve/moderado/grave)
+3. Uma mensagem de cobrança/encorajamento adequada (seja direto, mas empático)
+
+Retorne JSON com:
+{
+  "on_track": true/false,
+  "deviation_level": "none" | "light" | "moderate" | "severe",
+  "message": "sua mensagem aqui",
+  "recommendation": "ação recomendada"
+}
+"""
+
+
+# ---------------------------------------------------------------------------
+# Análise de progresso
+# ---------------------------------------------------------------------------
+
+def analyze_progress() -> dict:
+    """
+    Compara agenda planejada vs. realidade atual.
+    Retorna análise estruturada do progresso.
+    """
+    today_blocks = memory.get_today_agenda()
+    active_session = memory.get_active_focus_session()
+    now = datetime.now()
+    current_time_str = now.strftime("%H:%M")
+
+    # Blocos que já deveriam ter passado (time_slot de início ≤ agora)
+    overdue_blocks = []
+    current_block = None
+    upcoming_blocks = []
+
+    for block in today_blocks:
+        slot = block.get("time_slot", "")
+        if "-" in slot:
+            try:
+                start_str = slot.split("-")[0].strip()
+                end_str = slot.split("-")[1].strip()
+                start_t = datetime.strptime(f"{date.today()} {start_str}", "%Y-%m-%d %H:%M")
+                end_t = datetime.strptime(f"{date.today()} {end_str}", "%Y-%m-%d %H:%M")
+
+                if end_t < now and not block.get("completed"):
+                    overdue_blocks.append(block)
+                elif start_t <= now <= end_t:
+                    current_block = block
+                elif start_t > now:
+                    upcoming_blocks.append(block)
+            except ValueError:
+                pass
+
+    load = {
+        "total": len(today_blocks),
+        "completed": sum(1 for b in today_blocks if b.get("completed")),
+        "overdue": len(overdue_blocks),
+        "current": current_block,
+        "upcoming": len(upcoming_blocks),
+    }
+
+    # Calcula on-track básico (sem LLM)
+    on_track = len(overdue_blocks) == 0
+
+    return {
+        "timestamp": now.isoformat(),
+        "current_time": current_time_str,
+        "on_track": on_track,
+        "load": load,
+        "overdue_blocks": overdue_blocks,
+        "current_block": current_block,
+        "upcoming_blocks_count": len(upcoming_blocks),
+        "active_focus_session": active_session,
+    }
+
+
+def analyze_with_llm(progress: dict) -> dict:
+    """
+    Usa o GPT-4o para gerar análise e mensagem personalizada de cobrança.
+    Retorna dict com on_track, deviation_level, message, recommendation.
+    """
+    progress_str = json.dumps(progress, ensure_ascii=False, indent=2, default=str)
+
+    try:
+        response = _client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": DEVIATION_PROMPT},
+                {"role": "user", "content": f"Dados de progresso:\n{progress_str}"},
+            ],
+            temperature=0.6,
+            response_format={"type": "json_object"},
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        notifier.error(f"Erro na análise LLM: {e}", AGENT_NAME)
+        # Fallback: análise básica sem LLM
+        if progress.get("on_track"):
+            return {
+                "on_track": True,
+                "deviation_level": "none",
+                "message": "Você está no caminho certo! Continue focado.",
+                "recommendation": "Mantenha o ritmo atual.",
+            }
+        else:
+            overdue = progress.get("load", {}).get("overdue", 0)
+            return {
+                "on_track": False,
+                "deviation_level": "moderate" if overdue <= 2 else "severe",
+                "message": f"Atenção! {overdue} bloco(s) da agenda não foram concluídos. Hora de volcar o foco!",
+                "recommendation": "Revise a agenda e retome a próxima tarefa pendente.",
+            }
+
+
+# ---------------------------------------------------------------------------
+# Loop de verificação periódica
+# ---------------------------------------------------------------------------
+
+def _run_focus_check() -> None:
+    """Executado pelo scheduler a cada intervalo configurado."""
+    notifier.focus_alert("═══ CHECK-IN DO FOCUS GUARD ═══", AGENT_NAME)
+
+    progress = analyze_progress()
+    analysis = analyze_with_llm(progress)
+
+    # Salva estado atual
+    memory.set_state(_state_key, {
+        "last_check": datetime.now().isoformat(),
+        "on_track": analysis.get("on_track", True),
+        "deviation_level": analysis.get("deviation_level", "none"),
+    })
+
+    # Exibe resumo
+    load = progress.get("load", {})
+    notifier.info(
+        f"Agenda hoje: {load.get('completed', 0)}/{load.get('total', 0)} blocos concluídos "
+        f"| {load.get('overdue', 0)} atrasado(s)",
+        AGENT_NAME,
+    )
+
+    # Sessão de foco ativa
+    active = progress.get("active_focus_session")
+    if active:
+        started = active.get("started_at", "")
+        notifier.info(f"Sessão ativa: '{active.get('task_title')}' desde {started[:16]}", AGENT_NAME)
+
+    # Mensagem de análise
+    deviation = analysis.get("deviation_level", "none")
+    message = analysis.get("message", "")
+    recommendation = analysis.get("recommendation", "")
+
+    if deviation == "none":
+        notifier.success(f"✅ {message}", AGENT_NAME)
+    elif deviation == "light":
+        notifier.warning(f"⚡ {message}", AGENT_NAME)
+    elif deviation == "moderate":
+        notifier.warning(f"🚨 {message}", AGENT_NAME)
+        if recommendation:
+            notifier.warning(f"   → {recommendation}", AGENT_NAME)
+    else:  # severe
+        notifier.error(f"🔥 {message}", AGENT_NAME)
+        if recommendation:
+            notifier.error(f"   → {recommendation}", AGENT_NAME)
+
+    # Registra alerta no banco se houver desvio
+    if not analysis.get("on_track", True):
+        alert_type = f"deviation_{deviation}"
+        full_msg = f"{message}"
+        if recommendation:
+            full_msg += f" | Recomendação: {recommendation}"
+        memory.create_alert(alert_type, full_msg)
+
+    # Blocos atrasados
+    overdue = progress.get("overdue_blocks", [])
+    if overdue:
+        notifier.warning("Blocos atrasados:", AGENT_NAME)
+        for b in overdue:
+            notifier.warning(
+                f"  • {b.get('time_slot', '?')} — {b.get('task_title', '?')}", AGENT_NAME
+            )
+
+    notifier.separator()
+
+
+def _background_loop() -> None:
+    """Thread principal do Focus Guard — roda o scheduler.run_pending() em loop."""
+    notifier.agent_event(
+        f"Focus Guard iniciado (verificação a cada {FOCUS_CHECK_INTERVAL_MINUTES} min).",
+        AGENT_NAME,
+    )
+
+    # Configura o job periódico
+    schedule.every(FOCUS_CHECK_INTERVAL_MINUTES).minutes.do(_run_focus_check)
+
+    # Executa uma verificação imediata ao iniciar
+    _run_focus_check()
+
+    while not _stop_event.is_set():
+        schedule.run_pending()
+        time.sleep(30)  # Polling a cada 30 segundos
+
+    notifier.info("Focus Guard encerrado.", AGENT_NAME)
+
+
+# ---------------------------------------------------------------------------
+# API pública — start/stop da thread de background
+# ---------------------------------------------------------------------------
+
+def start_guard() -> None:
+    """Inicia o Focus Guard em background thread (daemon)."""
+    global _guard_thread
+    if _guard_thread and _guard_thread.is_alive():
+        notifier.warning("Focus Guard já está rodando.", AGENT_NAME)
+        return
+
+    _stop_event.clear()
+    _guard_thread = threading.Thread(
+        target=_background_loop,
+        name="FocusGuardThread",
+        daemon=True,
+    )
+    _guard_thread.start()
+    notifier.success("Focus Guard iniciado em background.", AGENT_NAME)
+
+
+def stop_guard() -> None:
+    """Para o Focus Guard."""
+    _stop_event.set()
+    schedule.clear()
+    notifier.info("Focus Guard parado.", AGENT_NAME)
+
+
+def is_running() -> bool:
+    """Verifica se o Focus Guard está ativo."""
+    return _guard_thread is not None and _guard_thread.is_alive()
+
+
+def force_check() -> dict:
+    """Força uma verificação imediata (chamável pelo Orchestrator)."""
+    notifier.agent_event("Verificação forçada pelo Orchestrator.", AGENT_NAME)
+    progress = analyze_progress()
+    analysis = analyze_with_llm(progress)
+
+    # Imprime no terminal igual ao check automático
+    _run_focus_check()
+
+    return {"progress": progress, "analysis": analysis}
+
+
+# ---------------------------------------------------------------------------
+# Gestão de sessões de foco (Pomodoro-style)
+# ---------------------------------------------------------------------------
+
+def start_focus_session(task_id: int, task_title: str, minutes: int = 25) -> dict:
+    """Inicia uma sessão de foco rastreada."""
+    # Encerra sessão anterior se existir
+    active = memory.get_active_focus_session()
+    if active:
+        memory.end_focus_session(active["id"], status="abandoned")
+        notifier.warning(
+            f"Sessão anterior '{active['task_title']}' encerrada (abandonada).", AGENT_NAME
+        )
+
+    session_id = memory.start_focus_session(task_id, task_title, minutes)
+    notifier.focus_alert(
+        f"🎯 Sessão de foco iniciada: '{task_title}' ({minutes} minutos)", AGENT_NAME
+    )
+    memory.set_state("current_focus_task", {"task_id": task_id, "title": task_title})
+
+    return {"session_id": session_id, "task_title": task_title, "planned_minutes": minutes}
+
+
+def end_focus_session(status: str = "completed", notes: str = "") -> dict:
+    """Encerra a sessão de foco ativa."""
+    active = memory.get_active_focus_session()
+    if not active:
+        notifier.warning("Nenhuma sessão de foco ativa.", AGENT_NAME)
+        return {"message": "Nenhuma sessão ativa."}
+
+    memory.end_focus_session(active["id"], status, notes or None)
+    memory.set_state("current_focus_task", None)
+
+    emoji = "✅" if status == "completed" else "⚠️"
+    notifier.success(
+        f"{emoji} Sessão encerrada: '{active['task_title']}' ({status})", AGENT_NAME
+    )
+    return {"session_id": active["id"], "status": status, "task_title": active["task_title"]}
+
+
+# ---------------------------------------------------------------------------
+# Handoff entry point — chamado pelo Orchestrator
+# ---------------------------------------------------------------------------
+
+def handle_handoff(payload: dict) -> dict:
+    """
+    Ponto de entrada para handoffs do Orchestrator.
+    """
+    action = payload.get("action", "")
+    notifier.agent_event(f"Recebendo handoff: action='{action}'", AGENT_NAME)
+
+    handoff_id = memory.log_handoff("orchestrator", AGENT_NAME, action, payload)
+
+    try:
+        result: dict = {}
+
+        if action == "start_guard":
+            start_guard()
+            result = {"message": "Focus Guard iniciado.", "running": True}
+
+        elif action == "stop_guard":
+            stop_guard()
+            result = {"message": "Focus Guard parado.", "running": False}
+
+        elif action == "force_check":
+            check = force_check()
+            result = check
+
+        elif action == "start_session":
+            session = start_focus_session(
+                task_id=payload["task_id"],
+                task_title=payload["task_title"],
+                minutes=payload.get("minutes", 25),
+            )
+            result = session
+
+        elif action == "end_session":
+            session = end_focus_session(
+                status=payload.get("status", "completed"),
+                notes=payload.get("notes", ""),
+            )
+            result = session
+
+        elif action == "status":
+            state = memory.get_state(_state_key, {})
+            active = memory.get_active_focus_session()
+            result = {
+                "running": is_running(),
+                "last_check": state.get("last_check"),
+                "on_track": state.get("on_track", True),
+                "deviation_level": state.get("deviation_level", "none"),
+                "active_session": active,
+            }
+
+        elif action == "get_alerts":
+            alerts = memory.get_pending_alerts()
+            result = {"alerts": alerts, "count": len(alerts)}
+
+        else:
+            raise ValueError(f"Ação desconhecida: '{action}'")
+
+        memory.update_handoff_result(handoff_id, result, "success")
+        return {"status": "success", "result": result}
+
+    except Exception as exc:
+        error_msg = str(exc)
+        notifier.error(f"Erro no handoff '{action}': {error_msg}", AGENT_NAME)
+        memory.update_handoff_result(handoff_id, {"error": error_msg}, "error")
+        return {"status": "error", "result": {"error": error_msg}}
