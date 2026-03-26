@@ -37,6 +37,10 @@ help: ## Exibe esta ajuda
 # SETUP
 # =============================================================================
 
+.PHONY: build
+build: install ## Alias Railway-friendly: instala dependências (projeto Python, sem transpile)
+	@echo "$(GREEN)✓ Build concluído — use 'make dev' para iniciar$(RESET)"
+
 .PHONY: setup
 setup: venv install env-copy redis-pull ## Configura tudo do zero (venv + deps + .env)
 	@echo "$(GREEN)✓ Setup completo! Edite o .env e rode: make dev$(RESET)"
