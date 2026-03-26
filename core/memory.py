@@ -31,6 +31,7 @@
 
 import json
 import subprocess
+import sys
 import time
 import threading
 from datetime import datetime, date
@@ -46,11 +47,15 @@ from config import REDIS_URL
 
 _redis_client: Optional[redis_lib.Redis] = None
 _lock = threading.Lock()
+
+# Só tenta auto-start no macOS com URL local (nunca em container Railway/Docker)
 _IS_LOCAL = any(h in REDIS_URL for h in ("localhost", "127.0.0.1"))
+_IS_MACOS = sys.platform == "darwin"
+_CAN_AUTOSTART = _IS_LOCAL and _IS_MACOS
 
 
 def _start_local_redis() -> None:
-    """Tenta iniciar redis-server local (brew install redis)."""
+    """Tenta iniciar redis-server local via brew (somente macOS)."""
     try:
         subprocess.Popen(
             ["redis-server", "--daemonize", "yes", "--loglevel", "warning"],
@@ -71,18 +76,22 @@ def _r() -> redis_lib.Redis:
     global _redis_client
     if _redis_client is None:
         client = redis_lib.from_url(
-            REDIS_URL, decode_responses=True, socket_connect_timeout=1
+            REDIS_URL, decode_responses=True, socket_connect_timeout=2
         )
         try:
             client.ping()
+            print(f"[Memory] Redis conectado: {REDIS_URL}")
         except (redis_lib.exceptions.ConnectionError, redis_lib.exceptions.TimeoutError):
-            if _IS_LOCAL:
+            if _CAN_AUTOSTART:
                 print("[Memory] Redis offline — tentando iniciar redis-server local...")
                 _start_local_redis()
                 client = redis_lib.from_url(REDIS_URL, decode_responses=True)
                 client.ping()  # levanta exceção se ainda falhar
             else:
-                raise
+                raise redis_lib.exceptions.ConnectionError(
+                    f"Não foi possível conectar ao Redis ({REDIS_URL}). "
+                    "Verifique se REDIS_URL está configurado corretamente no Railway."
+                )
         _redis_client = client
     return _redis_client
 

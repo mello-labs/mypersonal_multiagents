@@ -244,11 +244,17 @@ def _background_loop() -> None:
     # Configura sync diferencial periódico
     schedule.every(NOTION_SYNC_INTERVAL_MINUTES).minutes.do(_run_differential_sync)
 
-    # Executa uma verificação imediata ao iniciar
-    _run_focus_check()
+    # Executa uma verificação imediata ao iniciar (protegida contra falha de Redis)
+    try:
+        _run_focus_check()
+    except Exception as e:
+        notifier.warning(f"Check inicial ignorado (Redis indisponível?): {e}", AGENT_NAME)
 
     while not _stop_event.is_set():
-        schedule.run_pending()
+        try:
+            schedule.run_pending()
+        except Exception as e:
+            notifier.warning(f"Erro no scheduler (ignorado): {e}", AGENT_NAME)
         time.sleep(30)  # Polling a cada 30 segundos
 
     notifier.info("Focus Guard encerrado.", AGENT_NAME)

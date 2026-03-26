@@ -31,7 +31,11 @@ BASE_DIR = Path(__file__).parent
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    memory.init_db()
+    try:
+        memory.init_db()
+    except Exception as e:
+        print(f"[WARN] Redis indisponível no startup: {e}")
+        print("[WARN] App iniciando sem Redis — configure REDIS_URL no Railway.")
     if not focus_guard.is_running():
         focus_guard.start_guard()
     yield
