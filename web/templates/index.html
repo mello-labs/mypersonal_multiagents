@@ -49,11 +49,45 @@
 
 </div>
 
-{# ── Chat (col 1-2, rows 2-3) ── #}
-<div class="tile chat-tile gc-1-3 gr-2-4">
+{# ── Agenda (col 1-2, rows 2-3) ── #}
+<div class="tile tile-col gc-1-3 gr-2-4">
   <div class="tile-hd">
+    <span class="tile-lbl">📅 Agenda Hoje</span>
+    <button class="tile-act" hx-get="/agenda" hx-target="#agenda-body"
+            hx-swap="innerHTML" aria-label="Atualizar agenda">↻</button>
+  </div>
+  <div id="agenda-body" class="tile-scroll">
+    {% include "partials/agenda.html" %}
+  </div>
+</div>
+
+{# ── Tasks (col 3-4, rows 2-3) ── #}
+<div class="tile tile-col gc-3-5 gr-2-4">
+  <div class="tile-hd"><span class="tile-lbl">✅ Tarefas</span></div>
+  <form class="add-row"
+        hx-post="/task"
+        hx-target="#tasks-body"
+        hx-swap="innerHTML"
+        hx-on::after-request="this.reset()">
+    <input class="ai" type="text" name="title" placeholder="Nova tarefa..." required aria-label="Título da tarefa">
+    <select class="ap" name="priority" aria-label="Prioridade">
+      <option value="Alta">🔴</option>
+      <option value="Média" selected>🟡</option>
+      <option value="Baixa">⚪</option>
+    </select>
+    <button class="btn-add" type="submit" aria-label="Adicionar tarefa">+</button>
+  </form>
+  <div id="tasks-body" class="tile-scroll">
+    {% include "partials/tasks.html" %}
+  </div>
+</div>
+
+{# ── Chat flutuante ── #}
+<div id="chat-panel" class="chat-panel" role="dialog" aria-label="Chat" aria-modal="true">
+  <div class="chat-panel-hd">
     <span class="tile-lbl">💬 Chat</span>
     <span id="chat-loading" class="htmx-indicator chat-spinner">●●●</span>
+    <button class="chat-close" onclick="closeChat()" aria-label="Fechar chat">✕</button>
   </div>
   <div class="chat-msgs" id="chat-msgs">
     <div class="msg">
@@ -74,55 +108,42 @@
   </form>
 </div>
 
-{# ── Agenda (col 3, rows 2-3) ── #}
-<div class="tile tile-col gc-3 gr-2-4">
-  <div class="tile-hd">
-    <span class="tile-lbl">📅 Agenda Hoje</span>
-    <button class="tile-act" hx-get="/agenda" hx-target="#agenda-body"
-            hx-swap="innerHTML" aria-label="Atualizar agenda">↻</button>
-  </div>
-  <div id="agenda-body" class="tile-scroll">
-    {% include "partials/agenda.html" %}
-  </div>
-</div>
-
-{# ── Tasks (col 4, rows 2-3) ── #}
-<div class="tile tile-col gc-4 gr-2-4">
-  <div class="tile-hd"><span class="tile-lbl">✅ Tarefas</span></div>
-  <form class="add-row"
-        hx-post="/task"
-        hx-target="#tasks-body"
-        hx-swap="innerHTML"
-        hx-on::after-request="this.reset()">
-    <input class="ai" type="text" name="title" placeholder="Nova tarefa..." required aria-label="Título da tarefa">
-    <select class="ap" name="priority" aria-label="Prioridade">
-      <option value="Alta">🔴</option>
-      <option value="Média" selected>🟡</option>
-      <option value="Baixa">⚪</option>
-    </select>
-    <button class="btn-add" type="submit" aria-label="Adicionar tarefa">+</button>
-  </form>
-  <div id="tasks-body" class="tile-scroll">
-    {% include "partials/tasks.html" %}
-  </div>
-</div>
+{# ── FAB ── #}
+<button id="chat-fab" class="chat-fab" onclick="toggleChat()" aria-label="Abrir chat">💬</button>
 
 <script>
-  /* Scroll chat para o final após HTMX injetar resposta */
+  var _chatOpen = false;
+
+  function toggleChat() {
+    _chatOpen ? closeChat() : openChat();
+  }
+  function openChat() {
+    _chatOpen = true;
+    document.getElementById('chat-panel').classList.add('open');
+    document.getElementById('chat-fab').classList.add('active');
+    document.querySelector('#chat-panel .ci').focus();
+  }
+  function closeChat() {
+    _chatOpen = false;
+    document.getElementById('chat-panel').classList.remove('open');
+    document.getElementById('chat-fab').classList.remove('active');
+  }
+
+  /* Fecha com Esc */
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && _chatOpen) closeChat();
+  });
+
   function scrollChat() {
     var m = document.getElementById('chat-msgs');
     if (m) m.scrollTop = m.scrollHeight;
   }
-
-  /* Limita chat a 40 mensagens — remove as mais antigas */
   function trimChat() {
     var m = document.getElementById('chat-msgs');
     if (!m) return;
     var msgs = m.querySelectorAll('.msg');
-    var MAX = 40;
-    if (msgs.length > MAX) {
-      for (var i = 0; i < msgs.length - MAX; i++) msgs[i].remove();
-    }
+    if (msgs.length > 40)
+      for (var i = 0; i < msgs.length - 40; i++) msgs[i].remove();
     scrollChat();
   }
 </script>
