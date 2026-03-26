@@ -10,13 +10,13 @@ VENV   := .venv
 PIP    := $(VENV)/bin/pip
 PY     := $(VENV)/bin/python
 
-# Cores ANSI
-BOLD   := \033[1m
-CYAN   := \033[36m
-GREEN  := \033[32m
-YELLOW := \033[33m
-RED    := \033[31m
-RESET  := \033[0m
+# Cores ANSI (via printf para compatibilidade)
+BOLD   := $(shell printf '\033[1m')
+CYAN   := $(shell printf '\033[36m')
+GREEN  := $(shell printf '\033[32m')
+YELLOW := $(shell printf '\033[33m')
+RED    := $(shell printf '\033[31m')
+RESET  := $(shell printf '\033[0m')
 
 .DEFAULT_GOAL := help
 
