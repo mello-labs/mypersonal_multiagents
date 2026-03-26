@@ -7,21 +7,21 @@
 # Iniciar:  python -m web.app
 #           uvicorn web.app:app --reload --port 8000
 
+import asyncio
 import sys
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from agents import orchestrator, focus_guard
 from agents import notion_sync
-from core import memory, notifier
+from core import memory
 
 BASE_DIR = Path(__file__).parent
 
@@ -58,60 +58,79 @@ async def favicon():
 # ---------------------------------------------------------------------------
 
 _REDIS_WARN = "Redis indisponível — configure REDIS_URL no Railway."
+_NOTION_WARN = "Notion não configurado — defina NOTION_API_KEY e NOTION_DATABASE_ID."
 
 
 def _safe(fn, fallback):
-    """Executa fn(); retorna fallback se Redis falhar."""
+    """Executa fn(); retorna fallback se qualquer exceção ocorrer."""
     try:
         return fn()
     except Exception:
         return fallback
 
 
+async def _safe_async(coro, fallback):
+    """Aguarda coro; retorna fallback em caso de erro."""
+    try:
+        return await coro
+    except Exception:
+        return fallback
+
+
 def _summary_ctx() -> dict:
+    """Contexto de resumo do sistema — nunca lança exceção."""
     summary = _safe(orchestrator.get_system_summary, {
-        "total_tasks": 0, "pending_tasks": 0, "completed_tasks": 0,
-        "active_focus": False, "pending_alerts": 0,
-        "guard_running": focus_guard.is_running(),
+        "tasks": {"a_fazer": 0, "em_progresso": 0, "concluido": 0},
+        "focus": {"guard_running": focus_guard.is_running(), "on_track": True},
+        "agenda_today": {"total_blocks": 0, "completed": 0},
+        "alerts": {"pending": 0},
         "redis_ok": False,
     })
     return {"summary": summary}
 
 
 # ---------------------------------------------------------------------------
-# Rotas principais
+# Health
 # ---------------------------------------------------------------------------
 
 @app.get("/health")
 async def health():
-    """Lightweight health check para Railway — sempre retorna 200 se o processo está vivo."""
+    """Lightweight health check — sempre retorna 200 se o processo está vivo."""
     result: dict = {"status": "ok"}
     try:
         tasks_count = len(memory.list_all_tasks())
         result["db"] = "ok"
         result["tasks"] = tasks_count
     except Exception as e:
-        # Redis pode ainda não estar disponível; servidor segue respondendo
         result["db"] = "unavailable"
         result["db_error"] = str(e)[:120]
     return JSONResponse(result)
 
 
+# ---------------------------------------------------------------------------
+# Rotas full-page
+# ---------------------------------------------------------------------------
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     ctx = _summary_ctx()
-    ctx["agenda"] = _safe(memory.get_today_agenda, [])
-    ctx["tasks"]  = _safe(memory.list_all_tasks, [])
-    ctx["redis_warn"] = _REDIS_WARN if not ctx["summary"].get("redis_ok") else ""
+    ctx["agenda"]     = _safe(memory.get_today_agenda, [])
+    ctx["tasks"]      = _safe(memory.list_all_tasks, [])
+    ctx["redis_warn"] = "" if ctx["summary"].get("redis_ok") else _REDIS_WARN
     return templates.TemplateResponse(request, "index.html", ctx)
 
 
+# ---------------------------------------------------------------------------
+# Partials HTMX
+# ---------------------------------------------------------------------------
+
 @app.post("/chat", response_class=HTMLResponse)
 async def chat(request: Request, message: str = Form(...)):
+    """Chat com o Orchestrator — I/O bloqueante movido para thread pool."""
     try:
-        response = orchestrator.process(message)
+        response = await asyncio.to_thread(orchestrator.process, message)
     except Exception as e:
-        response = f"⚠️ {_REDIS_WARN} ({e})"
+        response = f"⚠️ Erro: {e}"
     return templates.TemplateResponse(
         request,
         "partials/chat_message.html",
@@ -121,16 +140,14 @@ async def chat(request: Request, message: str = Form(...)):
 
 @app.get("/status", response_class=HTMLResponse)
 async def status(request: Request):
-    return templates.TemplateResponse(
-        request, "partials/status.html", _summary_ctx()
-    )
+    return templates.TemplateResponse(request, "partials/status.html", _summary_ctx())
 
 
 @app.get("/agenda", response_class=HTMLResponse)
 async def agenda(request: Request):
     return templates.TemplateResponse(
         request, "partials/agenda.html",
-        {"blocks": _safe(memory.get_today_agenda, [])}
+        {"blocks": _safe(memory.get_today_agenda, [])},
     )
 
 
@@ -138,7 +155,7 @@ async def agenda(request: Request):
 async def tasks(request: Request):
     return templates.TemplateResponse(
         request, "partials/tasks.html",
-        {"tasks": _safe(memory.list_all_tasks, [])}
+        {"tasks": _safe(memory.list_all_tasks, [])},
     )
 
 
@@ -150,12 +167,13 @@ async def create_task(
     scheduled_time: str = Form(""),
 ):
     _safe(lambda: memory.create_task(
-        title=title, priority=priority,
+        title=title,
+        priority=priority,
         scheduled_time=scheduled_time or None,
     ), None)
     return templates.TemplateResponse(
         request, "partials/tasks.html",
-        {"tasks": _safe(memory.list_all_tasks, [])}
+        {"tasks": _safe(memory.list_all_tasks, [])},
     )
 
 
@@ -164,15 +182,20 @@ async def complete_task(request: Request, task_id: int):
     _safe(lambda: memory.update_task_status(task_id, "Concluído"), None)
     return templates.TemplateResponse(
         request, "partials/tasks.html",
-        {"tasks": _safe(memory.list_all_tasks, [])}
+        {"tasks": _safe(memory.list_all_tasks, [])},
     )
 
 
 @app.post("/sync", response_class=HTMLResponse)
 async def sync(request: Request):
-    count = _safe(notion_sync.sync_differential, 0)
+    """Sync com Notion — I/O bloqueante em thread pool; retorna imediatamente."""
+    try:
+        count = await asyncio.to_thread(notion_sync.sync_differential)
+        sync_msg = f"{count} tarefa(s) sincronizada(s)."
+    except Exception as e:
+        sync_msg = f"⚠️ Sync falhou: {str(e)[:80]}"
     ctx = _summary_ctx()
-    ctx["sync_msg"] = f"{count} tarefa(s) sincronizada(s)."
+    ctx["sync_msg"] = sync_msg
     return templates.TemplateResponse(request, "partials/status.html", ctx)
 
 
@@ -181,7 +204,7 @@ async def complete_block(request: Request, block_id: int):
     _safe(lambda: memory.mark_block_completed(block_id, True), None)
     return templates.TemplateResponse(
         request, "partials/agenda.html",
-        {"blocks": _safe(memory.get_today_agenda, [])}
+        {"blocks": _safe(memory.get_today_agenda, [])},
     )
 
 
