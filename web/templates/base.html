@@ -227,6 +227,16 @@
     }
     @keyframes pulse { 0%,100% { opacity:.2; } 50% { opacity:1; } }
 
+    /* ── Error toast (global HTMX errors) ── */
+    #err-toast {
+      position: fixed; bottom: 16px; right: 16px; z-index: 999;
+      background: rgba(255,69,58,.92); color: #fff;
+      padding: 8px 14px; border-radius: 10px; font-size: 12px;
+      opacity: 0; transform: translateY(6px);
+      transition: opacity .2s, transform .2s; pointer-events: none;
+    }
+    #err-toast.show { opacity: 1; transform: translateY(0); }
+
     /* ── Misc ── */
     .empty { padding: 18px; text-align: center; color: var(--t3); font-size: 11px; }
     ::-webkit-scrollbar { width: 3px; }
@@ -259,9 +269,32 @@
 
   <div class="bento">{% block content %}{% endblock %}</div>
 
+  {# Toast global para erros HTMX #}
+  <div id="err-toast" role="alert" aria-live="assertive"></div>
+
   <script>
     function clk(){document.getElementById('clk').textContent=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
     clk(); setInterval(clk,10000);
+
+    /* Handler global de erros HTMX — mostra toast vermelho */
+    (function() {
+      var _toastTimer;
+      function showErr(msg) {
+        var t = document.getElementById('err-toast');
+        if (!t) return;
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(_toastTimer);
+        _toastTimer = setTimeout(function() { t.classList.remove('show'); }, 4000);
+      }
+      document.body.addEventListener('htmx:responseError', function(e) {
+        var status = e.detail.xhr ? e.detail.xhr.status : '?';
+        showErr('⚠ Erro ' + status + ' — tente novamente');
+      });
+      document.body.addEventListener('htmx:sendError', function() {
+        showErr('⚠ Sem conexão com o servidor');
+      });
+    })();
   </script>
 </body>
 </html>

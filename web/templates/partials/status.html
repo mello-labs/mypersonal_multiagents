@@ -4,41 +4,59 @@
 {% set al = summary.alerts %}
 
 <div id="stats-row" style="display:contents">
-  <div class="tile" style="grid-column:1; grid-row:1">
-    <div class="tile-hd"><span class="tile-lbl">A fazer</span><span class="tile-ico">📋</span></div>
+
+  <div class="tile gc-1 gr-1">
+    <div class="tile-hd"><span class="tile-lbl">A Fazer</span><span class="tile-ico">📋</span></div>
     <div class="stat">
-      <div class="stat-n" style="color:#0a84ff">{{ t.a_fazer }}</div>
+      <div class="stat-n stat-blue">{{ t.a_fazer }}</div>
       <div class="stat-s">{{ t.em_progresso }} prog · {{ t.concluido }} ✓</div>
     </div>
   </div>
 
-  <div class="tile" style="grid-column:2; grid-row:1">
+  <div class="tile gc-2 gr-1">
     <div class="tile-hd"><span class="tile-lbl">Agenda</span><span class="tile-ico">📅</span></div>
     <div class="stat">
-      <div class="stat-n" style="color:#30d158">{{ a.completed }}<span style="font-size:18px;color:rgba(255,255,255,.25)">/{{ a.total_blocks }}</span></div>
+      <div class="stat-n stat-green">{{ a.completed }}<span class="stat-total">/{{ a.total_blocks }}</span></div>
       <div class="stat-s">blocos hoje</div>
     </div>
   </div>
 
-  <div class="tile" style="grid-column:3; grid-row:1">
+  <div class="tile gc-3 gr-1">
     <div class="tile-hd"><span class="tile-lbl">Foco</span><span class="tile-ico">🎯</span></div>
     <div class="stat">
-      <div class="stat-n" style="font-size:22px;padding-top:6px">
-        {% if f.guard_running %}<span style="color:#30d158">● Ativo</span>{% else %}<span style="color:#ff453a">● Off</span>{% endif %}
+      <div class="stat-n stat-label">
+        {% if f.guard_running %}<span class="c-green">● Ativo</span>{% else %}<span class="c-red">● Off</span>{% endif %}
       </div>
       <div class="stat-s">{% if f.on_track %}on track{% else %}⚠ desvio{% endif %}</div>
     </div>
   </div>
 
-  <div class="tile" style="grid-column:4; grid-row:1">
+  <div class="tile gc-4 gr-1">
     <div class="tile-hd"><span class="tile-lbl">Alertas</span><span class="tile-ico">🔔</span></div>
     <div class="stat">
-      <div class="stat-n" style="color:{% if al.pending > 0 %}#ff453a{% else %}rgba(255,255,255,.25){% endif %}">{{ al.pending }}</div>
+      <div class="stat-n {% if al.pending > 0 %}stat-red{% else %}stat-dim{% endif %}">{{ al.pending }}</div>
       <div class="stat-s">pendente{{ 's' if al.pending != 1 else '' }}</div>
     </div>
   </div>
 
-  {% if sync_msg is defined %}
-  <div style="grid-column:1/-1;grid-row:1;align-self:end;padding:4px 10px;background:rgba(48,209,88,.1);border-radius:8px;font-size:10px;color:#30d158;pointer-events:none">✓ {{ sync_msg }}</div>
-  {% endif %}
 </div>
+
+{# Toast fora do display:contents para evitar problemas de alinhamento #}
+{% if sync_msg is defined %}
+<div id="sync-toast-msg"
+     class="sync-toast gc-1-5 gr-1"
+     style="grid-column:1/-1;grid-row:1;align-self:end;pointer-events:none;z-index:5">
+  ✓ {{ sync_msg }}
+</div>
+<script>
+  (function() {
+    var el = document.getElementById('sync-toast-msg');
+    if (!el) return;
+    setTimeout(function() {
+      el.style.transition = 'opacity .5s';
+      el.style.opacity = '0';
+      setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 500);
+    }, 3000);
+  })();
+</script>
+{% endif %}

@@ -180,6 +180,12 @@ async def create_task(
 @app.post("/task/{task_id}/complete", response_class=HTMLResponse)
 async def complete_task(request: Request, task_id: int):
     _safe(lambda: memory.update_task_status(task_id, "Concluído"), None)
+    task = _safe(lambda: memory.get_task(task_id), None)
+    if task:
+        # Swap cirúrgico: retorna só a linha atualizada (preserva scroll)
+        return templates.TemplateResponse(
+            request, "partials/task_row.html", {"t": task}
+        )
     return templates.TemplateResponse(
         request, "partials/tasks.html",
         {"tasks": _safe(memory.list_all_tasks, [])},
@@ -202,9 +208,15 @@ async def sync(request: Request):
 @app.post("/block/{block_id}/complete", response_class=HTMLResponse)
 async def complete_block(request: Request, block_id: int):
     _safe(lambda: memory.mark_block_completed(block_id, True), None)
+    # Busca o bloco atualizado para swap cirúrgico
+    blocks = _safe(memory.get_today_agenda, [])
+    block = next((b for b in blocks if b["id"] == block_id), None)
+    if block:
+        return templates.TemplateResponse(
+            request, "partials/block_row.html", {"b": block}
+        )
     return templates.TemplateResponse(
-        request, "partials/agenda.html",
-        {"blocks": _safe(memory.get_today_agenda, [])},
+        request, "partials/agenda.html", {"blocks": blocks}
     )
 
 

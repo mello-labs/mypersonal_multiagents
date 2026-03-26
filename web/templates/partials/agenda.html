@@ -1,14 +1,6 @@
 {% if blocks %}
   {% for b in blocks %}
-  <div class="ab{{ ' done' if b.completed else '' }}">
-    <span class="at">{{ b.time_slot }}</span>
-    <span class="an">{{ b.task_title or '—' }}</span>
-    {% if not b.completed %}
-    <button class="abtn" hx-post="/block/{{ b.id }}/complete" hx-target="#agenda-body" hx-swap="innerHTML">✓</button>
-    {% else %}
-    <span style="color:#30d158;font-size:11px">✓</span>
-    {% endif %}
-  </div>
+  {% include "partials/block_row.html" %}
   {% endfor %}
 {% else %}
   <div class="empty">Sem blocos hoje</div>

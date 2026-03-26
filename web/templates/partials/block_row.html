@@ -1,0 +1,13 @@
+<div class="ab{{ ' done' if b.completed else '' }}" id="ab-{{ b.id }}">
+  <span class="at">{{ b.time_slot }}</span>
+  <span class="an">{{ b.task_title or '—' }}</span>
+  {% if not b.completed %}
+  <button class="abtn"
+          hx-post="/block/{{ b.id }}/complete"
+          hx-target="#ab-{{ b.id }}"
+          hx-swap="outerHTML"
+          aria-label="Marcar bloco concluído">✓</button>
+  {% else %}
+  <span class="c-green" style="font-size:11px">✓</span>
+  {% endif %}
+</div>

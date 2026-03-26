@@ -1,0 +1,13 @@
+<div class="tr{{ ' done' if t.status == 'Concluído' else '' }}" id="tr-{{ t.id }}">
+  <span class="pri {% if t.priority == 'Alta' %}ph{% elif t.priority == 'Média' %}pm{% else %}pl{% endif %}"></span>
+  <span class="tn">{{ t.title }}</span>
+  {% if t.status != 'Concluído' %}
+  <button class="tc"
+          hx-post="/task/{{ t.id }}/complete"
+          hx-target="#tr-{{ t.id }}"
+          hx-swap="outerHTML"
+          aria-label="Concluir tarefa">✓</button>
+  {% else %}
+  <span class="c-green" style="font-size:9px">✓</span>
+  {% endif %}
+</div>

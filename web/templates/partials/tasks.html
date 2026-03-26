@@ -1,12 +1,6 @@
 {% if tasks %}
   {% for t in tasks %}
-  <div class="tr{{ ' done' if t.status == 'Concluído' else '' }}">
-    <span class="pri {% if t.priority == 'Alta' %}ph{% elif t.priority == 'Média' %}pm{% else %}pl{% endif %}"></span>
-    <span class="tn">{{ t.title }}</span>
-    {% if t.status != 'Concluído' %}
-    <button class="tc" hx-post="/task/{{ t.id }}/complete" hx-target="#tasks-body" hx-swap="innerHTML">✓</button>
-    {% endif %}
-  </div>
+  {% include "partials/task_row.html" %}
   {% endfor %}
 {% else %}
   <div class="empty">Sem tarefas</div>
