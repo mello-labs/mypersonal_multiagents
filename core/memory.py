@@ -278,7 +278,7 @@ def get_today_agenda() -> list[dict]:
         data = r.hgetall(f"block:{bid}")
         if data:
             data["id"] = int(bid)
-            blocks.append(_to_dict(data, int_fields=["id"]))
+            blocks.append(_to_dict(data, int_fields=["id", "completed"]))
     return blocks
 
 
@@ -439,7 +439,7 @@ def get_pending_alerts() -> list[dict]:
         data = r.hgetall(f"alert:{aid}")
         if data and data.get("acknowledged", "0") == "0":
             data["id"] = int(aid)
-            alerts.append(_to_dict(data, int_fields=["id"]))
+            alerts.append(_to_dict(data, int_fields=["id", "acknowledged"]))
     return alerts
 
 
