@@ -7,6 +7,9 @@ __pycache__/
 *.pyd
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
+.claude/
 logs/
 reports/
 token.json
