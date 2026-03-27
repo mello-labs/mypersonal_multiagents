@@ -32,6 +32,13 @@ from agents import (
     scheduler,
     validator,
 )
+from agents.persona_manager import (
+    get_direct_prompt,
+    get_persona,
+    get_synthesis_prompt,
+    get_system_prompt,
+    get_temperature,
+)
 from config import OPENAI_API_KEY, OPENAI_MODEL
 from core import memory, notifier
 
@@ -139,24 +146,39 @@ Regras importantes:
 """
 
 
-# Prompt para síntese da resposta final
-SYNTHESIS_PROMPT = """Você é o Orchestrator de um sistema de gestão pessoal.
+# Prompt base para síntese — será composto com a persona ativa
+_SYNTHESIS_BASE = """Você é o Orchestrator de um sistema de gestão pessoal.
 Baseado nos resultados dos agentes especialistas, forneça uma resposta clara,
-concisa e útil ao usuário em português brasileiro.
+concisa e útil ao usuário.
 
-Seja direto e prático. Se houver alertas importantes (tarefas atrasadas, desvios de foco),
-destaque-os.
 Nunca invente tarefas, alertas, horários ou estados do sistema. Só mencione itens que
 apareçam explicitamente nos resultados recebidos. Se faltar dado, diga que não foi possível
 confirmar.
-Não mencione detalhes técnicos internos (IDs de banco, payloads JSON, etc.).
-"""
+Não mencione detalhes técnicos internos (IDs de banco, payloads JSON, etc.)."""
 
-DIRECT_RESPONSE_PROMPT = """Você é um assistente de gestão pessoal.
-Responda em português, com objetividade.
+_DIRECT_BASE = """Você é um assistente de gestão pessoal.
 Nunca afirme estado do sistema, tarefas, alertas ou agenda sem dados explícitos no contexto.
-Se a pergunta depender do estado do sistema e ele não estiver disponível, diga que precisa verificar.
-"""
+Se a pergunta depender do estado do sistema e ele não estiver disponível, diga que precisa verificar."""
+
+# Mantém compatibilidade — usados como fallback
+SYNTHESIS_PROMPT = _SYNTHESIS_BASE
+DIRECT_RESPONSE_PROMPT = _DIRECT_BASE
+
+
+def _build_synthesis_prompt(persona_id: Optional[str] = None) -> str:
+    """Compõe o prompt de síntese com a persona ativa."""
+    persona_override = get_synthesis_prompt(persona_id)
+    if persona_override:
+        return f"{_SYNTHESIS_BASE}\n\nEstilo de resposta:\n{persona_override}"
+    return _SYNTHESIS_BASE
+
+
+def _build_direct_prompt(persona_id: Optional[str] = None) -> str:
+    """Compõe o prompt de resposta direta com a persona ativa."""
+    persona_override = get_direct_prompt(persona_id)
+    if persona_override:
+        return f"{_DIRECT_BASE}\n\nEstilo de resposta:\n{persona_override}"
+    return _DIRECT_BASE
 
 
 def _context_history_text(context: Optional[dict]) -> str:
@@ -481,6 +503,7 @@ def synthesize_response(
     intent: str,
     handoff_results: list[dict],
     context: Optional[dict] = None,
+    persona_id: Optional[str] = None,
 ) -> str:
     """
     Usa o GPT-4o para sintetizar os resultados dos agentes em resposta natural.
@@ -493,8 +516,13 @@ def synthesize_response(
     history_text = _context_history_text(context)
     history_block = f"Histórico recente:\n{history_text}\n\n" if history_text else ""
 
+    synthesis_prompt = _build_synthesis_prompt(persona_id)
+    persona_system = get_system_prompt(persona_id)
+    if persona_system:
+        synthesis_prompt = f"{synthesis_prompt}\n\nPersonalidade:\n{persona_system}"
+
     messages = [
-        {"role": "system", "content": SYNTHESIS_PROMPT},
+        {"role": "system", "content": synthesis_prompt},
         {
             "role": "user",
             "content": f"""{history_block}Input original do usuário: "{user_input}"
@@ -511,7 +539,7 @@ Forneça uma resposta útil e clara ao usuário.""",
         response = _client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=messages,
-            temperature=0.5,
+            temperature=get_temperature(persona_id, "synthesis"),
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -531,20 +559,27 @@ Forneça uma resposta útil e clara ao usuário.""",
 # ---------------------------------------------------------------------------
 
 
-def process(user_input: str, context: Optional[dict] = None) -> str:
+def process(
+    user_input: str,
+    context: Optional[dict] = None,
+    persona_id: Optional[str] = None,
+) -> str:
     """
     Pipeline completo: input → roteamento → execução → síntese → resposta.
 
     Args:
         user_input: Comando/pergunta do usuário em linguagem natural.
         context:    Contexto extra opcional (ex: conversa anterior).
+        persona_id: ID da persona ativa (None = persona padrão).
 
     Returns:
         Resposta final em texto para exibir ao usuário.
     """
     notifier.separator(f"ORCHESTRATOR")
+    persona = get_persona(persona_id)
+    persona_label = persona.get("short_name", "default") if persona else "default"
     notifier.agent_event(
-        f'Input recebido: "{user_input[:80]}{"..." if len(user_input) > 80 else ""}"',
+        f'[{persona_label}] Input: "{user_input[:80]}{"..." if len(user_input) > 80 else ""}"',
         AGENT_NAME,
     )
 
@@ -563,8 +598,7 @@ def process(user_input: str, context: Optional[dict] = None) -> str:
     handoffs = routing.get("handoffs", [])
     if not handoffs:
         notifier.info("Nenhum agente necessário — respondendo diretamente.", AGENT_NAME)
-        # Resposta direta sem agentes especialistas
-        return _direct_response(user_input, context)
+        return _direct_response(user_input, context, persona_id)
 
     results = execute_handoffs(handoffs)
 
@@ -574,30 +608,41 @@ def process(user_input: str, context: Optional[dict] = None) -> str:
         intent=routing.get("intent", ""),
         handoff_results=results,
         context=context,
+        persona_id=persona_id,
     )
 
     notifier.separator()
     return response
 
 
-def _direct_response(user_input: str, context: Optional[dict] = None) -> str:
+def _direct_response(
+    user_input: str,
+    context: Optional[dict] = None,
+    persona_id: Optional[str] = None,
+) -> str:
     """Resposta direta do Orchestrator para perguntas simples sem agentes."""
     history_text = _context_history_text(context)
     history_block = f"Histórico recente:\n{history_text}\n\n" if history_text else ""
+
+    direct_prompt = _build_direct_prompt(persona_id)
+    persona_system = get_system_prompt(persona_id)
+    if persona_system:
+        direct_prompt = f"{direct_prompt}\n\nPersonalidade:\n{persona_system}"
+
     try:
         response = _client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
                 {
                     "role": "system",
-                    "content": DIRECT_RESPONSE_PROMPT,
+                    "content": direct_prompt,
                 },
                 {
                     "role": "user",
                     "content": f"{history_block}Pergunta atual: {user_input}",
                 },
             ],
-            temperature=0.7,
+            temperature=get_temperature(persona_id, "direct"),
         )
         return response.choices[0].message.content.strip()
     except Exception as e:

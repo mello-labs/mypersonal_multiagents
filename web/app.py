@@ -24,12 +24,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from agents import calendar_sync, focus_guard, notion_sync, orchestrator
+from agents.persona_manager import get_persona, list_personas, set_active_persona
 from config import LOG_FILE
 from core import memory
 
 BASE_DIR = Path(__file__).parent
 MAX_CHAT_TURNS = 12
 CHAT_SESSION_COOKIE = "multiagentes_chat_sid"
+PERSONA_COOKIE = "multiagentes_persona"
 _chat_sessions: dict[str, list[dict]] = {}
 _chat_sessions_lock = threading.Lock()
 
@@ -86,7 +88,23 @@ async def _safe_async(coro, fallback):
         return fallback
 
 
-def _summary_ctx() -> dict:
+def _get_persona_id(request: Request) -> str:
+    """Lê o ID da persona ativa do cookie."""
+    return request.cookies.get(PERSONA_COOKIE, "coordinator")
+
+
+def _persona_ctx(request: Request) -> dict:
+    """Contexto de persona para os templates."""
+    persona_id = _get_persona_id(request)
+    active = get_persona(persona_id)
+    return {
+        "personas": list_personas(),
+        "active_persona": active,
+        "active_persona_id": persona_id,
+    }
+
+
+def _summary_ctx(request: Request = None) -> dict:
     """Contexto de resumo do sistema — nunca lança exceção."""
     summary = _safe(
         orchestrator.get_system_summary,
@@ -98,7 +116,10 @@ def _summary_ctx() -> dict:
             "redis_ok": False,
         },
     )
-    return {"summary": summary}
+    ctx = {"summary": summary}
+    if request:
+        ctx.update(_persona_ctx(request))
+    return ctx
 
 
 def _tail_logs(limit: int = 120) -> list[str]:
@@ -204,7 +225,7 @@ async def health():
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    ctx = _summary_ctx()
+    ctx = _summary_ctx(request)
     ctx["agenda"] = _safe(memory.get_today_agenda, [])
     ctx["blocks"] = ctx["agenda"]  # alias for partials/agenda.html
     ctx["tasks"] = _safe(memory.list_all_tasks, [])
@@ -216,6 +237,7 @@ async def index(request: Request):
 @app.get("/audit", response_class=HTMLResponse)
 async def audit(request: Request):
     ctx = _audit_ctx()
+    ctx.update(_persona_ctx(request))
     ctx["page_name"] = "audit"
     return templates.TemplateResponse(request, "audit.html", ctx)
 
@@ -246,6 +268,7 @@ async def agenda(
         )
 
     ctx = _agenda_history_ctx(start_date, end_date)
+    ctx.update(_persona_ctx(request))
     ctx["page_name"] = "agenda"
     return templates.TemplateResponse(request, "agenda.html", ctx)
 
@@ -273,21 +296,29 @@ async def agenda_history_redirect(
 async def chat(request: Request, message: str = Form(...)):
     """Chat com o Orchestrator — I/O bloqueante movido para thread pool."""
     session_id, is_new_session = _get_chat_session_id(request)
+    persona_id = _get_persona_id(request)
     history = _get_chat_history(session_id)
     context = {
         "chat_history": history[-6:],
         "system_summary": _safe(orchestrator.get_system_summary, {}),
     }
     try:
-        response = await asyncio.to_thread(orchestrator.process, message, context)
+        response = await asyncio.to_thread(
+            orchestrator.process, message, context, persona_id
+        )
     except Exception as e:
         response = f"⚠️ Erro: {e}"
     _store_chat_turn(session_id, "user", message)
     _store_chat_turn(session_id, "assistant", response)
+    active_persona = get_persona(persona_id)
     template_response = templates.TemplateResponse(
         request,
         "partials/chat_message.html",
-        {"user_message": message, "bot_response": response},
+        {
+            "user_message": message,
+            "bot_response": response,
+            "active_persona": active_persona,
+        },
     )
     if is_new_session:
         template_response.set_cookie(
@@ -347,7 +378,7 @@ async def tasks(request: Request):
 
 @app.get("/tasks-page", response_class=HTMLResponse)
 async def tasks_page(request: Request):
-    ctx = _summary_ctx()
+    ctx = _summary_ctx(request)
     ctx["tasks"] = _safe(memory.list_all_tasks, [])
     ctx["page_name"] = "tasks"
     return templates.TemplateResponse(request, "tasks_page.html", ctx)
@@ -355,7 +386,7 @@ async def tasks_page(request: Request):
 
 @app.get("/chat-page", response_class=HTMLResponse)
 async def chat_page(request: Request):
-    ctx = _summary_ctx()
+    ctx = _summary_ctx(request)
     ctx["page_name"] = "chat"
     return templates.TemplateResponse(request, "chat_page.html", ctx)
 
@@ -422,6 +453,52 @@ async def complete_block(request: Request, block_id: int):
         "partials/agenda.html",
         {"blocks": _safe(memory.get_today_agenda, [])},
     )
+
+
+# ---------------------------------------------------------------------------
+# Persona selector
+# ---------------------------------------------------------------------------
+
+
+@app.get("/personas", response_class=JSONResponse)
+async def personas_list():
+    """Retorna lista de personas disponíveis."""
+    return JSONResponse(list_personas())
+
+
+@app.post("/persona/{persona_id}", response_class=HTMLResponse)
+async def switch_persona(request: Request, persona_id: str):
+    """Troca a persona ativa — salva no cookie e retorna o seletor atualizado."""
+    set_active_persona(persona_id)
+    active = get_persona(persona_id)
+    all_personas = list_personas()
+
+    # Retorna o dropdown atualizado via HTMX
+    options = "".join(
+        f'<option value="{p["id"]}"{"selected" if p["id"] == persona_id else ""}>'
+        f'{p["icon"]} {p["short_name"]}</option>'
+        for p in all_personas
+    )
+    html = (
+        f'<select name="persona" '
+        f'hx-post="/persona/{{this.value}}" '
+        f'hx-trigger="change" '
+        f'hx-target="#persona-selector" '
+        f'hx-swap="innerHTML" '
+        f'class="persona-select">'
+        f"{options}</select>"
+        f'<span class="persona-label">{active.get("icon", "●")} {active.get("short_name", "")}</span>'
+    )
+
+    response = HTMLResponse(html)
+    response.set_cookie(
+        PERSONA_COOKIE,
+        persona_id,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 365,
+    )
+    return response
 
 
 # ---------------------------------------------------------------------------

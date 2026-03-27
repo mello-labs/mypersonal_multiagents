@@ -601,6 +601,62 @@
       .spin { animation: sp .6s linear infinite; }
       @keyframes sp { to { transform: rotate(360deg); } }
 
+      /* ══ Persona selector ══ */
+      .persona-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      .persona-select {
+        appearance: none;
+        -webkit-appearance: none;
+        background: var(--s3);
+        border: 1px solid var(--s5);
+        color: var(--text);
+        padding: 4px 24px 4px 8px;
+        border-radius: 100px;
+        font-size: 11px;
+        font-weight: 600;
+        font-family: var(--font);
+        cursor: pointer;
+        outline: none;
+        transition: border-color .15s;
+        min-width: 0;
+        max-width: 100px;
+        text-overflow: ellipsis;
+      }
+      .persona-select:focus { border-color: var(--blue); }
+      .persona-wrap::after {
+        content: '▾';
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 9px;
+        color: var(--t3);
+        pointer-events: none;
+      }
+      .persona-label { display: none; }
+      .persona-toast {
+        position: fixed;
+        top: calc(var(--safe-t) + 52px);
+        left: 50%;
+        transform: translateX(-50%) translateY(-8px);
+        background: var(--s3);
+        border: 1px solid var(--s5);
+        color: var(--text);
+        padding: 8px 16px;
+        border-radius: var(--rs);
+        font-size: 13px;
+        font-weight: 500;
+        z-index: 200;
+        opacity: 0;
+        transition: opacity .2s, transform .2s;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      .persona-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
       /* ══ HTMX ══ */
       .htmx-indicator { opacity: 0; transition: opacity .2s; }
       .htmx-request .htmx-indicator { opacity: 1; }
@@ -637,6 +693,19 @@
       <header class="hdr">
         <div class="hdr-title">{% block page_title %}Multiagentes{% endblock %}</div>
         <div class="hdr-right">
+          <div class="persona-wrap" id="persona-selector">
+            <select name="persona"
+                    class="persona-select"
+                    onchange="switchPersona(this.value)">
+              {% if personas is defined and personas %}
+                {% for p in personas %}
+                <option value="{{ p.id }}"{% if active_persona_id is defined and p.id == active_persona_id %} selected{% endif %}>{{ p.icon }} {{ p.short_name }}</option>
+                {% endfor %}
+              {% else %}
+                <option value="coordinator" selected>🎯 Coord</option>
+              {% endif %}
+            </select>
+          </div>
           <span class="hdr-clock" id="clk"></span>
           <div class="pill">
             <span class="pill-dot{% if not summary or not summary.focus.guard_running %} off{% endif %}"></span>
@@ -688,6 +757,7 @@
     </div>
 
     <div id="err-toast" role="alert" aria-live="assertive"></div>
+    <div id="persona-toast" class="persona-toast"></div>
 
     <script>
       !function(){
@@ -700,6 +770,19 @@
         document.body.addEventListener('htmx:sendError',function(){showErr('Sem conexao')});
 
         if('serviceWorker'in navigator)navigator.serviceWorker.register('/static/sw.js').catch(function(){});
+
+        window.switchPersona=function(id){
+          fetch('/persona/'+id,{method:'POST'}).then(function(r){return r.text()}).then(function(html){
+            // Update cookie client-side as backup
+            document.cookie='multiagentes_persona='+id+';path=/;max-age=31536000;samesite=lax';
+            // Show toast
+            var sel=document.querySelector('.persona-select');
+            var opt=sel?sel.options[sel.selectedIndex]:null;
+            var label=opt?opt.textContent.trim():id;
+            var toast=document.getElementById('persona-toast');
+            if(toast){toast.textContent='Persona: '+label;toast.classList.add('show');setTimeout(function(){toast.classList.remove('show')},2000)}
+          }).catch(function(){});
+        };
       }();
     </script>
   </body>

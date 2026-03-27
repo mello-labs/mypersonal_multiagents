@@ -4,8 +4,8 @@
 
 <div class="chat-msgs" id="chat-msgs">
   <div class="msg">
-    <div class="msg-av">&#9041;</div>
-    <div class="msg-bub">Ola! Como posso ajudar?</div>
+    <div class="msg-av">{% if active_persona and active_persona.icon %}{{ active_persona.icon }}{% else %}&#9041;{% endif %}</div>
+    <div class="msg-bub">{% if active_persona and active_persona.name %}{{ active_persona.name }} aqui. Como posso ajudar?{% else %}Ola! Como posso ajudar?{% endif %}</div>
   </div>
 </div>
 
