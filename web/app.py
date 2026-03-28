@@ -304,7 +304,7 @@ async def chat(request: Request, message: str = Form(...)):
     }
     try:
         response = await asyncio.to_thread(
-            orchestrator.process, message, context, persona_id
+            orchestrator.process, message, context
         )
     except Exception as e:
         response = f"⚠️ Erro: {e}"

@@ -1,10 +1,10 @@
-from datetime import date
+import datetime
 
 from agents import focus_guard
 
 
 def test_focus_guard_reagenda_bloco_atrasado_e_audita(mem, monkeypatch):
-    today = date.today().isoformat()
+    today = datetime.date.today().isoformat()
     overdue_id = mem.create_agenda_block(today, "00:00-00:30", "Troia", task_id=7)
 
     monkeypatch.setattr(

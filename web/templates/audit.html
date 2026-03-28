@@ -74,7 +74,7 @@
     {% for h in handoffs %}
     <div class="ls-item">
       <div class="ls-top">
-        <span class="ls-title">{{ h.source_agent }} &rarr; {{ h.target_agent }}</span>
+        <span class="ls-title">{{ h.source_agent }} → {{ h.target_agent }}</span>
         <span class="badge {% if h.status == 'error' %}badge-err{% elif h.status == 'success' %}badge-ok{% else %}badge-warn{% endif %}">{{ h.status }}</span>
       </div>
       <div class="ls-detail" style="font-family:var(--mono);font-size:12px">{{ h.action }}</div>

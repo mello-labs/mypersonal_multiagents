@@ -91,7 +91,7 @@ def analyze_progress() -> dict:
                 )
                 end_t = datetime.strptime(f"{date.today()} {end_str}", "%Y-%m-%d %H:%M")
 
-                if end_t < now and not block.get("completed"):
+                if (end_t < now or start_t < now) and not block.get("completed"):
                     overdue_blocks.append(block)
                 elif start_t <= now <= end_t:
                     current_block = block
