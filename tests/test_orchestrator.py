@@ -7,7 +7,7 @@ def test_route_intent_usa_fluxo_deterministico_para_atrasos(mem, monkeypatch):
             "LLM não deveria ser chamado para consulta de atraso/alerta"
         )
 
-    monkeypatch.setattr(orchestrator._client.chat.completions, "create", fail_if_called)
+    monkeypatch.setattr(orchestrator, "chat_completions", fail_if_called)
 
     routing = orchestrator.route_intent(
         "vejo que não fui avisado do último atraso de tarefa"
@@ -27,7 +27,7 @@ def test_route_intent_considera_historico_no_follow_up(mem, monkeypatch):
     def fail_if_called(**kwargs):
         raise AssertionError("Histórico deveria bastar para o roteamento heurístico")
 
-    monkeypatch.setattr(orchestrator._client.chat.completions, "create", fail_if_called)
+    monkeypatch.setattr(orchestrator, "chat_completions", fail_if_called)
 
     routing = orchestrator.route_intent(
         "sim como está dentro do meu sistema me ajude indicando o que fazer",
@@ -49,7 +49,7 @@ def test_sintese_factual_para_foco_nao_usa_llm(mem, monkeypatch):
     def fail_if_called(**kwargs):
         raise AssertionError("Resposta factual deveria evitar síntese via LLM")
 
-    monkeypatch.setattr(orchestrator._client.chat.completions, "create", fail_if_called)
+    monkeypatch.setattr(orchestrator, "chat_completions", fail_if_called)
 
     handoff_results = [
         {

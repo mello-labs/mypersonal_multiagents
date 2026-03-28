@@ -5,4 +5,13 @@
 #   from agents import scheduler
 #   etc.
 
-__all__ = ["orchestrator", "scheduler", "focus_guard", "notion_sync", "validator"]
+__all__ = [
+    "calendar_sync",
+    "focus_guard",
+    "notion_sync",
+    "orchestrator",
+    "persona_manager",
+    "retrospective",
+    "scheduler",
+    "validator",
+]

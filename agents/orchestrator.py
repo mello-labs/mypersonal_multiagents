@@ -9,7 +9,7 @@
 #                                      ↓
 #                          Resposta consolidada → Usuário
 #
-# O Orchestrator usa o GPT-4o como "roteador inteligente": o LLM decide
+# O Orchestrator usa o GPT-4o-mini como "roteador inteligente": o LLM decide
 # qual combinação de agentes acionar e em que ordem.
 
 import json
@@ -17,11 +17,9 @@ import os
 import re
 import sys
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from openai import OpenAI
 
 # Importa os agentes especialistas
 from agents import (
@@ -39,11 +37,10 @@ from agents.persona_manager import (
     get_system_prompt,
     get_temperature,
 )
-from config import OPENAI_API_KEY, OPENAI_MODEL
 from core import memory, notifier
+from core.openai_utils import chat_completions
 
 AGENT_NAME = "orchestrator"
-_client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 # ---------------------------------------------------------------------------
@@ -404,8 +401,7 @@ Retorne o JSON de roteamento.""",
     ]
 
     try:
-        response = _client.chat.completions.create(
-            model=OPENAI_MODEL,
+        response = chat_completions(
             messages=messages,
             temperature=0.2,
             response_format={"type": "json_object"},
@@ -506,7 +502,7 @@ def synthesize_response(
     persona_id: Optional[str] = None,
 ) -> str:
     """
-    Usa o GPT-4o para sintetizar os resultados dos agentes em resposta natural.
+    Usa o GPT-GPT-4o-mini para sintetizar os resultados dos agentes em resposta natural.
     """
     fast_path = _format_focus_response(handoff_results)
     if fast_path:
@@ -536,8 +532,7 @@ Forneça uma resposta útil e clara ao usuário.""",
     ]
 
     try:
-        response = _client.chat.completions.create(
-            model=OPENAI_MODEL,
+        response = chat_completions(
             messages=messages,
             temperature=get_temperature(persona_id, "synthesis"),
         )
@@ -545,7 +540,7 @@ Forneça uma resposta útil e clara ao usuário.""",
     except Exception as e:
         notifier.error(f"Erro na síntese: {e}", AGENT_NAME)
         # Fallback: lista resultados diretamente
-        lines = [f"Resultado das ações executadas:"]
+        lines = ["Resultado das ações executadas:"]
         for r in handoff_results:
             status_emoji = "✅" if r["status"] == "success" else "❌"
             lines.append(f"{status_emoji} {r['agent']}.{r['action']}: {r['status']}")
@@ -630,8 +625,7 @@ def _direct_response(
         direct_prompt = f"{direct_prompt}\n\nPersonalidade:\n{persona_system}"
 
     try:
-        response = _client.chat.completions.create(
-            model=OPENAI_MODEL,
+        response = chat_completions(
             messages=[
                 {
                     "role": "system",

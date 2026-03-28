@@ -15,13 +15,10 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from openai import OpenAI
-
-from config import OPENAI_API_KEY, OPENAI_MODEL
 from core import memory, notifier
+from core.openai_utils import chat_completions
 
 AGENT_NAME = "scheduler"
-_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Prompt de sistema para o LLM do Scheduler
 SYSTEM_PROMPT = """Você é o Scheduler Agent de um sistema de gestão pessoal.
@@ -174,7 +171,8 @@ def find_next_available_slot(
             day_start,
             exclude_block_ids=set(),
         )
-        return target_date, _format_slot(start_dt, duration_minutes)
+        if start_dt.date().isoformat() == target_date:
+            return target_date, _format_slot(start_dt, duration_minutes)
 
     fallback_date = reference.date().isoformat()
     return fallback_date, _format_slot(
@@ -437,8 +435,7 @@ Por favor, crie uma agenda otimizada para hoje. Retorne JSON puro (sem markdown)
 """
 
     try:
-        response = _client.chat.completions.create(
-            model=OPENAI_MODEL,
+        response = chat_completions(
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},

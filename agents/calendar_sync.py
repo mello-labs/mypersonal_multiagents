@@ -77,8 +77,9 @@ def _get_service():
             )
             creds = flow.run_local_server(port=0)
 
-        # Salva token para próximas execuções
-        with open(GOOGLE_TOKEN_FILE, "w") as f:
+        # Salva token para próximas execuções com permissões restritas (600)
+        fd = os.open(GOOGLE_TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
             f.write(creds.to_json())
 
     return build("calendar", "v3", credentials=creds)
@@ -313,6 +314,10 @@ def export_block_to_calendar(
         tz_str = str(local_tz)
     except ImportError:
         tz_str = "America/Sao_Paulo"
+        notifier.warning(
+            "tzlocal não disponível — usando America/Sao_Paulo como fallback de timezone.",
+            AGENT_NAME,
+        )
 
     event_body = {
         "summary": task_title,

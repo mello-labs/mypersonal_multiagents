@@ -12,19 +12,12 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from openai import OpenAI
-from config import (
-    OPENAI_API_KEY,
-    OPENAI_MODEL,
-    NOTION_TOKEN,
-    NOTION_RETROSPECTIVE_PAGE_ID,
-    NOTION_API_BASE,
-    NOTION_API_VERSION,
-)
+from agents import notion_sync as _notion_sync
+from config import NOTION_RETROSPECTIVE_PAGE_ID
 from core import memory, notifier
+from core.openai_utils import chat_completions
 
 AGENT_NAME = "retrospective"
-_client = OpenAI(api_key=OPENAI_API_KEY)
 
 RETROSPECTIVE_PROMPT = """Você é um coach de produtividade pessoal.
 Analise os dados da semana e gere uma retrospectiva clara com:
@@ -124,12 +117,11 @@ def collect_week_data() -> dict:
 # ---------------------------------------------------------------------------
 
 def generate_report(data: dict) -> str:
-    """Gera o relatório markdown via GPT-4o."""
+    """Gera o relatório markdown via GPT-4o-mini."""
     data_str = json.dumps(data, ensure_ascii=False, indent=2, default=str)
 
     try:
-        response = _client.chat.completions.create(
-            model=OPENAI_MODEL,
+        response = chat_completions(
             messages=[
                 {"role": "system", "content": RETROSPECTIVE_PROMPT},
                 {
@@ -158,14 +150,6 @@ def generate_report(data: dict) -> str:
 # ---------------------------------------------------------------------------
 # Criação de página no Notion
 # ---------------------------------------------------------------------------
-
-def _notion_headers() -> dict:
-    return {
-        "Authorization": f"Bearer {NOTION_TOKEN}",
-        "Content-Type": "application/json",
-        "Notion-Version": NOTION_API_VERSION,
-    }
-
 
 def _markdown_to_notion_blocks(text: str) -> list[dict]:
     """Converte markdown simples em blocos Notion."""
@@ -213,13 +197,11 @@ def _markdown_to_notion_blocks(text: str) -> list[dict]:
 
 def create_notion_retrospective_page(title: str, content_md: str) -> Optional[str]:
     """Cria uma página de retrospectiva no Notion. Retorna o page_id ou None."""
-    if not NOTION_TOKEN or not NOTION_RETROSPECTIVE_PAGE_ID:
+    if not NOTION_RETROSPECTIVE_PAGE_ID:
         notifier.warning(
             "NOTION_RETROSPECTIVE_PAGE_ID não configurado — página não criada.", AGENT_NAME
         )
         return None
-
-    import requests
 
     blocks = _markdown_to_notion_blocks(content_md)
     payload = {
@@ -230,14 +212,13 @@ def create_notion_retrospective_page(title: str, content_md: str) -> Optional[st
         "children": blocks,
     }
 
-    url = f"{NOTION_API_BASE}/pages"
-    resp = requests.post(url, headers=_notion_headers(), json=payload, timeout=20)
-    if resp.ok:
-        page_id = resp.json()["id"]
+    try:
+        result = _notion_sync._request("POST", "pages", data=payload)
+        page_id = result["id"]
         notifier.success(f"Retrospectiva criada no Notion: {page_id[:8]}...", AGENT_NAME)
         return page_id
-    else:
-        notifier.error(f"Erro ao criar página no Notion: {resp.text[:200]}", AGENT_NAME)
+    except Exception as e:
+        notifier.error(f"Erro ao criar página no Notion: {e}", AGENT_NAME)
         return None
 
 

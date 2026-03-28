@@ -22,20 +22,16 @@ import schedule
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from openai import OpenAI
-
 from agents import notion_sync as _notion_sync
 from agents import scheduler as _scheduler
 from config import (
     FOCUS_CHECK_INTERVAL_MINUTES,
     NOTION_SYNC_INTERVAL_MINUTES,
-    OPENAI_API_KEY,
-    OPENAI_MODEL,
 )
 from core import memory, notifier
+from core.openai_utils import chat_completions
 
 AGENT_NAME = "focus_guard"
-_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Estado interno do Focus Guard
 _state_key = "focus_guard_state"
@@ -91,7 +87,7 @@ def analyze_progress() -> dict:
                 )
                 end_t = datetime.strptime(f"{date.today()} {end_str}", "%Y-%m-%d %H:%M")
 
-                if (end_t < now or start_t < now) and not block.get("completed"):
+                if end_t < now and not block.get("completed"):
                     overdue_blocks.append(block)
                 elif start_t <= now <= end_t:
                     current_block = block
@@ -125,14 +121,13 @@ def analyze_progress() -> dict:
 
 def analyze_with_llm(progress: dict) -> dict:
     """
-    Usa o GPT-4o para gerar análise e mensagem personalizada de cobrança.
+    Usa o GPT-4o-mini para gerar análise e mensagem personalizada de cobrança.
     Retorna dict com on_track, deviation_level, message, recommendation.
     """
     progress_str = json.dumps(progress, ensure_ascii=False, indent=2, default=str)
 
     try:
-        response = _client.chat.completions.create(
-            model=OPENAI_MODEL,
+        response = chat_completions(
             messages=[
                 {"role": "system", "content": DEVIATION_PROMPT},
                 {"role": "user", "content": f"Dados de progresso:\n{progress_str}"},
@@ -202,12 +197,22 @@ def _auto_reschedule_overdue_blocks(progress: dict) -> list[dict]:
     return actions
 
 
-def _run_focus_check() -> None:
-    """Executado pelo scheduler a cada intervalo configurado."""
+def _run_focus_check(
+    progress: Optional[dict] = None,
+    analysis: Optional[dict] = None,
+) -> dict:
+    """Executado pelo scheduler a cada intervalo configurado.
+
+    Aceita `progress` e `analysis` pré-computados para evitar chamadas LLM
+    duplicadas quando invocado a partir de `force_check`.
+    Retorna dict com progress e analysis para uso pelo chamador.
+    """
     notifier.focus_alert("═══ CHECK-IN DO FOCUS GUARD ═══", AGENT_NAME)
 
-    progress = analyze_progress()
-    analysis = analyze_with_llm(progress)
+    if progress is None:
+        progress = analyze_progress()
+    if analysis is None:
+        analysis = analyze_with_llm(progress)
     rescheduled_actions = _auto_reschedule_overdue_blocks(progress)
 
     # Salva estado atual
@@ -275,7 +280,7 @@ def _run_focus_check() -> None:
     # Registra alerta no banco se houver desvio
     if not analysis.get("on_track", True):
         alert_type = f"deviation_{deviation}"
-        full_msg = f"{message}"
+        full_msg = message
         if recommendation:
             full_msg += f" | Recomendação: {recommendation}"
         alert_id = memory.create_alert(alert_type, full_msg)
@@ -308,6 +313,7 @@ def _run_focus_check() -> None:
             )
 
     notifier.separator()
+    return {"progress": progress, "analysis": analysis}
 
 
 def _run_differential_sync() -> None:
@@ -386,15 +392,15 @@ def is_running() -> bool:
 
 
 def force_check() -> dict:
-    """Força uma verificação imediata (chamável pelo Orchestrator)."""
+    """Força uma verificação imediata (chamável pelo Orchestrator).
+
+    Computa progress e analysis uma única vez e repassa para _run_focus_check,
+    evitando chamadas LLM duplicadas.
+    """
     notifier.agent_event("Verificação forçada pelo Orchestrator.", AGENT_NAME)
     progress = analyze_progress()
     analysis = analyze_with_llm(progress)
-
-    # Imprime no terminal igual ao check automático
-    _run_focus_check()
-
-    return {"progress": progress, "analysis": analysis}
+    return _run_focus_check(progress=progress, analysis=analysis)
 
 
 # ---------------------------------------------------------------------------

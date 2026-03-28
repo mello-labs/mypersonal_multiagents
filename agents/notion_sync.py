@@ -21,7 +21,7 @@
 import os
 import sys
 from datetime import date, datetime, timedelta
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import requests
 from tenacity import (

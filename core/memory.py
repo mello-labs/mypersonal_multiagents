@@ -303,6 +303,8 @@ def create_agenda_block(
         r.zadd(
             f"blocks:date:{block_date}", {str(block_id): _ts_from_timeslot(time_slot)}
         )
+        if task_id is not None:
+            r.zadd(f"blocks:task:{task_id}", {str(block_id): _ts_from_timeslot(time_slot)})
         if notion_page_id:
             r.set(f"blocks:notion:{notion_page_id}", block_id)
         return block_id
@@ -431,6 +433,7 @@ def start_focus_session(
         r = _r()
         r.hset(f"session:{session_id}", mapping=data)
         r.zadd("sessions:all", {str(session_id): _ts(now)})
+        r.zadd(f"sessions:task:{task_id}", {str(session_id): _ts(now)})
         r.set("session:active", session_id)
         return session_id
 
@@ -478,6 +481,45 @@ def get_active_focus_session() -> Optional[dict]:
     # Sessão expirou ou foi finalizada; limpa ponteiro
     r.delete("session:active")
     return None
+
+
+def get_focus_sessions_for_task(task_id: int) -> list[dict]:
+    """Retorna todas as sessões de foco associadas a uma tarefa específica."""
+    r = _r()
+    session_ids = r.zrange(f"sessions:task:{task_id}", 0, -1)
+    sessions = []
+    for sid in session_ids:
+        data = r.hgetall(f"session:{sid}")
+        if data:
+            data["id"] = int(sid)
+            sessions.append(_to_dict(data, int_fields=["id"]))
+    return sessions
+
+
+def get_agenda_blocks_for_task(task_id: int) -> list[dict]:
+    """Retorna todos os blocos de agenda associados a uma tarefa específica."""
+    r = _r()
+    block_ids = r.zrange(f"blocks:task:{task_id}", 0, -1)
+    blocks = []
+    for bid in block_ids:
+        data = r.hgetall(f"block:{bid}")
+        if data:
+            data["id"] = int(bid)
+            blocks.append(
+                _to_dict(
+                    data,
+                    int_fields=[
+                        "id",
+                        "task_id",
+                        "completed",
+                        "rescheduled",
+                        "rescheduled_to_block_id",
+                        "source_block_id",
+                        "reschedule_count",
+                    ],
+                )
+            )
+    return blocks
 
 
 # =============================================================================

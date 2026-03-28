@@ -11,19 +11,18 @@
 # uma tarefa como concluída.
 
 import json
-import sys
 import os
+import sys
 from datetime import datetime
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from openai import OpenAI
-from config import OPENAI_API_KEY, OPENAI_MODEL
+from agents import notion_sync as _notion_sync
 from core import memory, notifier
+from core.openai_utils import chat_completions
 
 AGENT_NAME = "validator"
-_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Prompt do Validator para análise de conclusão via LLM
 VALIDATOR_PROMPT = """Você é o Validator Agent de um sistema de gestão pessoal.
@@ -68,37 +67,14 @@ def gather_evidence(task_id: int) -> dict:
     if not task:
         return {"error": f"Tarefa {task_id} não encontrada no banco local."}
 
-    # Sessões de foco associadas a esta tarefa
-    # (lê do banco diretamente via query customizada)
-    import sqlite3
-    from config import MEMORY_DB_PATH
-    conn = sqlite3.connect(MEMORY_DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-
-    focus_sessions = [
-        dict(r)
-        for r in conn.execute(
-            "SELECT * FROM focus_sessions WHERE task_id = ? ORDER BY started_at DESC",
-            (task_id,),
-        ).fetchall()
-    ]
-
-    # Blocos de agenda associados a esta tarefa
-    agenda_blocks = [
-        dict(r)
-        for r in conn.execute(
-            "SELECT * FROM agenda_blocks WHERE task_id = ?",
-            (task_id,),
-        ).fetchall()
-    ]
-    conn.close()
+    focus_sessions = memory.get_focus_sessions_for_task(task_id)
+    agenda_blocks = memory.get_agenda_blocks_for_task(task_id)
 
     # Informações do Notion (se disponível)
     notion_data = None
     if task.get("notion_page_id"):
         try:
-            from agents import notion_sync
-            notion_tasks = notion_sync.fetch_notion_tasks()
+            notion_tasks = _notion_sync.fetch_notion_tasks()
             notion_data = next(
                 (nt for nt in notion_tasks if nt["notion_page_id"] == task["notion_page_id"]),
                 None,
@@ -158,7 +134,7 @@ def check_data_consistency(evidence: dict) -> dict:
 
 def validate_with_llm(evidence: dict, flags: dict) -> dict:
     """
-    Usa o GPT-4o para analisar as evidências e emitir veredicto.
+    Usa o GPT-4o-mini para analisar as evidências e emitir veredicto.
     """
     data = {
         "task": evidence.get("task"),
@@ -185,8 +161,7 @@ Emita seu veredicto em JSON puro (sem markdown).
 """
 
     try:
-        response = _client.chat.completions.create(
-            model=OPENAI_MODEL,
+        response = chat_completions(
             messages=[
                 {"role": "system", "content": VALIDATOR_PROMPT},
                 {"role": "user", "content": prompt},
@@ -247,8 +222,7 @@ def apply_verdict(task_id: int, verdict: dict) -> dict:
         # Atualiza Notion se vinculado
         if task and task.get("notion_page_id"):
             try:
-                from agents import notion_sync
-                notion_sync.update_notion_task_status(
+                _notion_sync.update_notion_task_status(
                     task["notion_page_id"], "Concluído", actual_time
                 )
             except Exception as e:

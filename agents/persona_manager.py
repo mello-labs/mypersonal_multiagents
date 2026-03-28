@@ -9,8 +9,13 @@
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Optional
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from core import notifier
 
 _PERSONAS_DIR = Path(__file__).parent.parent / "personas"
 _DEFAULT_PERSONA_ID = "coordinator"
@@ -34,7 +39,7 @@ def _load_personas() -> None:
             persona["id"] = pid
             _personas[pid] = persona
         except (json.JSONDecodeError, OSError) as e:
-            print(f"[persona_manager] Erro ao carregar {filepath.name}: {e}")
+            notifier.error(f"Erro ao carregar {filepath.name}: {e}", "persona_manager")
 
 
 def _ensure_loaded() -> None:
