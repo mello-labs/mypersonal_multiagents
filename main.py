@@ -25,7 +25,7 @@ from typing import Optional
 # Garante que o diretório raiz está no sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agents import focus_guard, notion_sync, orchestrator, scheduler, validator
+from agents import focus_guard, life_guard, notion_sync, orchestrator, scheduler, validator
 from config import validate_config
 from core import memory, notifier
 
@@ -478,6 +478,52 @@ def cmd_chat() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Comandos Life Guard
+# ---------------------------------------------------------------------------
+
+
+def cmd_vida() -> None:
+    """Exibe status das rotinas pessoais do dia e dispara checks."""
+    notifier.separator("LIFE GUARD — ROTINAS DO DIA")
+    result = life_guard.run_all_checks()
+    notifier.info(f"Rotinas disparadas: {result['routines'] or 'nenhuma pendente'}", "life_guard")
+    notifier.info(f"Hidratação: {'lembrete enviado' if result['hydration'] else 'ok'}", "life_guard")
+    notifier.info(f"Financas alertadas: {result['finances'] or 'nenhuma vencendo'}", "life_guard")
+    notifier.separator()
+
+
+def cmd_pagar(args_str: str) -> None:
+    """Registra uma conta a pagar. Uso: pagar <nome> dia <N> valor <V>"""
+    # ex: "Cartao XP dia 15 valor 1200"
+    import re
+    match = re.match(r"(.+?)\s+dia\s+(\d+)\s+valor\s+([\d.,]+)", args_str.strip())
+    if not match:
+        notifier.error("Formato: pagar <nome> dia <N> valor <V>  (ex: pagar Cartao XP dia 15 valor 1200)", "life_guard")
+        return
+    name = match.group(1).strip()
+    due_day = int(match.group(2))
+    amount = float(match.group(3).replace(",", "."))
+    result = life_guard.add_finance(name, due_day, amount)
+    notifier.success(f"Registrado: {name} — vence dia {due_day} — R$ {amount:.2f}", "life_guard")
+
+
+def cmd_fiz(rotina: str) -> None:
+    """Confirma que uma rotina foi feita. Uso: fiz <exercicio|banho|almoco|jantar>"""
+    routine_map = {
+        "exercicio": "exercise",
+        "banho":     "shower",
+        "almoco":    "lunch",
+        "jantar":    "dinner",
+    }
+    routine_id = routine_map.get(rotina.strip().lower())
+    if not routine_id:
+        notifier.error(f"Rotina desconhecida: '{rotina}'. Opcoes: {', '.join(routine_map)}", "life_guard")
+        return
+    result = life_guard.confirm_routine(routine_id)
+    notifier.success(f"Rotina '{rotina}' confirmada para hoje.", "life_guard")
+
+
+# ---------------------------------------------------------------------------
 # Novos comandos Phase 2
 # ---------------------------------------------------------------------------
 
@@ -611,6 +657,16 @@ Exemplos:
     # web
     subparsers.add_parser("web", help="Inicia interface web (FastAPI)")
 
+    # vida / life guard
+    subparsers.add_parser("vida", help="Status das rotinas pessoais do dia")
+    subparsers.add_parser("life", help="Status das rotinas pessoais do dia (alias)")
+
+    pagar_parser = subparsers.add_parser("pagar", help="Registra conta a pagar (ex: pagar Cartao XP dia 15 valor 1200)")
+    pagar_parser.add_argument("args", nargs=argparse.REMAINDER)
+
+    fiz_parser = subparsers.add_parser("fiz", help="Confirma rotina feita (ex: fiz banho)")
+    fiz_parser.add_argument("rotina", nargs="?", default="")
+
     # calendar
     calendar_parser = subparsers.add_parser("calendar", help="Gerencia integração com Google Calendar")
     cal_sub = calendar_parser.add_subparsers(dest="calendar_action", metavar="AÇÃO")
@@ -666,6 +722,12 @@ def main() -> None:
         cmd_retrospective()
     elif command == "web":
         cmd_web()
+    elif command in ("vida", "life"):
+        cmd_vida()
+    elif command == "pagar":
+        cmd_pagar(" ".join(getattr(args, "args", [])))
+    elif command == "fiz":
+        cmd_fiz(getattr(args, "rotina", ""))
     elif command == "calendar":
         if args.calendar_action == "auth":
             cmd_calendar_auth()

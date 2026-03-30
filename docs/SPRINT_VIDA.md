@@ -1,4 +1,5 @@
 # SPRINT VIDA — Interrupção Cognitiva e Rotinas Pessoais
+
 **Status:** Pronto para implementar
 **Prioridade:** P0 — resolve o problema central: hiperfoco sem consciência de tempo
 **Estimativa:** 2-3 dias de implementação real
@@ -14,13 +15,15 @@ Precisamos de canais que forcem interrupção física: tela + som ambiente.
 
 ## Entregáveis
 
+```text
 | # | O que | Arquivo | Depende de |
-|---|---|---|---|
+|---|---|---|---|  
 | 1 | Mac push via osascript | `core/notifier.py` | nada |
 | 2 | Escalada por tempo no Focus Guard | `agents/focus_guard.py` | entregável 1 |
 | 3 | Alexa via IFTTT webhook | `core/notifier.py` | conta IFTTT |
 | 4 | Life Guard agent (rotinas pessoais) | `agents/life_guard.py` | entregável 1 |
 | 5 | Integração Life Guard no main.py | `main.py` | entregável 4 |
+````
 
 ---
 
@@ -63,12 +66,14 @@ def alexa_announce(message: str) -> None:
 ```
 
 **Variáveis de ambiente a adicionar no `.env`:**
-```
+
+```keys
 IFTTT_WEBHOOK_KEY=<sua_key_do_ifttt>
 IFTTT_ALEXA_EVENT=neo_alert
 ```
 
 **Setup IFTTT (10 minutos):**
+
 1. ifttt.com → Create applet
 2. If: Webhooks → "Receive a web request" → event name: `neo_alert`
 3. Then: Amazon Alexa → "Announce something" → message: `{{Value1}}`
@@ -110,6 +115,7 @@ def _check_escalation(session_minutes: int, task_title: str, planned_minutes: in
 ```
 
 **Chamar `_check_escalation` dentro de `_run_focus_check`:**
+
 ```python
 # Após calcular session_minutes a partir da sessão ativa
 if active_session and session_minutes:
@@ -148,6 +154,8 @@ from core import memory, notifier
 # ---------------------------------------------------------------------------
 # Rotinas diárias — horário e mensagem
 # ---------------------------------------------------------------------------
+
+```code
 DAILY_ROUTINES = [
     {
         "id":      "exercise",
@@ -183,10 +191,12 @@ DAILY_ROUTINES = [
     },
 ]
 
+````
+
 WATER_INTERVAL_MINUTES = 90
 ACTIVE_HOURS = (8, 22)  # só lembra entre 8h e 22h
 
-
+```code
 def check_daily_routines() -> list[dict]:
     """Verifica rotinas diárias e dispara lembretes."""
     now = datetime.now()
@@ -208,8 +218,9 @@ def check_daily_routines() -> list[dict]:
             triggered.append(routine["id"])
 
     return triggered
+````
 
-
+```code
 def check_hydration() -> bool:
     """Lembra de beber água a cada 90 minutos no horário ativo."""
     now = datetime.now()
@@ -227,14 +238,16 @@ def check_hydration() -> bool:
     _dispatch("Beber água.", "mac", sound=False)
     memory.set_state(state_key, now.isoformat())
     return True
-
+```
 
 def check_finances() -> list[dict]:
     """
     Verifica pagamentos próximos do vencimento.
     Os dados vêm de `life_guard:finances` no Redis (JSON array).
 
-    Formato esperado:
+## Formato esperado
+
+```code
     [
       {"name": "Cartão XP", "due_day": 15, "amount": 1200.00},
       {"name": "Aluguel",   "due_day": 5,  "amount": 3500.00},
@@ -264,14 +277,12 @@ def check_finances() -> list[dict]:
 
     return alerts
 
-
 def _dispatch(message: str, channel: str, sound: bool) -> None:
     if "mac" in channel:
         notifier.mac_push("NEØ Life Guard", message, sound=sound)
     if "alexa" in channel:
         notifier.alexa_announce(message)
     notifier.info(f"[life_guard] {message}")
-
 
 def run_all_checks() -> dict:
     """Entry point para o loop de background."""
@@ -280,7 +291,6 @@ def run_all_checks() -> dict:
         "hydration": check_hydration(),
         "finances": check_finances(),
     }
-
 
 def add_finance(name: str, due_day: int, amount: float) -> dict:
     """Adiciona ou atualiza um item de finanças pessoais."""
@@ -292,13 +302,11 @@ def add_finance(name: str, due_day: int, amount: float) -> dict:
     memory.set_state("life_guard:finances", json.dumps(finances))
     return {"status": "ok", "item": name}
 
-
 def confirm_routine(routine_id: str) -> dict:
     """Marca rotina como feita (ex: 'já me exercitei')."""
     today = date.today().isoformat()
     memory.set_state(f"life_guard:{today}:{routine_id}:done", "true")
     return {"status": "confirmed", "routine": routine_id}
-
 
 def handle_handoff(payload: dict) -> dict:
     action = payload.get("action")
@@ -309,6 +317,8 @@ def handle_handoff(payload: dict) -> dict:
     if action == "check":
         return run_all_checks()
     return {"error": f"unknown action: {action}"}
+````
+
 ```
 
 ---
@@ -326,6 +336,7 @@ life_guard.run_all_checks()
 ```
 
 **No CLI (main.py), adicionar comandos:**
+
 ```python
 elif command in ["vida", "life"]:
     result = life_guard.run_all_checks()
@@ -346,7 +357,7 @@ elif command.startswith("fiz "):
 
 ## Setup IFTTT + Alexa (passo a passo)
 
-```
+```terminal
 1. Criar conta em ifttt.com
 2. My Applets → New Applet
 3. IF: Webhooks → "Receive a web request"
@@ -370,6 +381,7 @@ elif command.startswith("fiz "):
 ## Variáveis de ambiente necessárias
 
 Adicionar ao `.env`:
+
 ```bash
 # Notificações
 IFTTT_WEBHOOK_KEY=           # da conta IFTTT

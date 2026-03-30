@@ -149,6 +149,43 @@ def agent_event(message: str, agent: str = "orchestrator") -> None:
 
 
 # ---------------------------------------------------------------------------
+# Notificações nativas — macOS e Alexa
+# ---------------------------------------------------------------------------
+def mac_push(title: str, message: str, sound: bool = False) -> None:
+    """Envia notificação nativa macOS via AppleScript."""
+    import subprocess
+    sound_line = ' sound name "Sosumi"' if sound else ""
+    script = f'display notification "{message}" with title "{title}"{sound_line}'
+    try:
+        subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            timeout=5,
+        )
+    except Exception:
+        pass  # nunca quebra o agente por falha de notificação
+
+
+def alexa_announce(message: str) -> None:
+    """Dispara anúncio na Alexa via Voice Monkey API."""
+    import os
+    import requests
+    token = os.getenv("VOICE_MONKEY_TOKEN", "")
+    device = os.getenv("VOICE_MONKEY_DEVICE", "eco-room")
+    if not token:
+        return
+    try:
+        voice = os.getenv("VOICE_MONKEY_VOICE", "Ricardo")
+        requests.get(
+            "https://api-v2.voicemonkey.io/announcement",
+            params={"token": token, "device": device, "text": message, "voice": voice},
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Separadores visuais
 # ---------------------------------------------------------------------------
 def separator(title: str = "", char: str = "─", width: int = 70) -> None:

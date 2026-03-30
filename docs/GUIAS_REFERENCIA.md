@@ -3,6 +3,7 @@
 Catálogo inicial de superfícies, runbooks e páginas de operação já existentes fora deste repositório.
 
 Objetivo:
+
 - manter uma fonte única de links úteis
 - registrar o contexto de uso de cada guia
 - permitir expansão futura para uma base mais estruturada

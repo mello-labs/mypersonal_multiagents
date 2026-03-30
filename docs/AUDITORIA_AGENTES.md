@@ -39,6 +39,7 @@ if (end_t < now or start_t < now) and not block.get("completed"):
 A condição `start_t < now` é verdadeira para qualquer bloco cujo início já passou, inclusive o bloco atual em execução. O `elif` de `current_block` (testado depois) nunca é alcançado para esse caso — o bloco em andamento entra em `overdue_blocks` antes. Resultado: Focus Guard emite falsos alertas de atraso para tarefas ativas.
 
 **Correção:**
+
 ```python
 # CORRETO — apenas blocos cujo FIM já passou
 if end_t < now and not block.get("completed"):
@@ -97,6 +98,7 @@ with open(GOOGLE_TOKEN_FILE, "w") as f:
 O OAuth refresh token do Google é gravado com as permissões padrão do sistema (tipicamente `0o644` — legível por todos os usuários). Em ambientes multiusuário, qualquer usuário local pode ler e reutilizar o token.
 
 **Correção:**
+
 ```python
 import stat
 fd = os.open(GOOGLE_TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

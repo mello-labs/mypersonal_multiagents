@@ -15,3 +15,6 @@ reports/
 token.json
 credentials.json
 *.plist
+
+# Redis dumps
+*.rdb

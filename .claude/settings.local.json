@@ -72,7 +72,22 @@
       "Bash(pnpm build:*)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://neo-content-landing.vercel.app/privacy)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://neo-content-landing.vercel.app/)",
-      "Bash(vercel ls:*)"
+      "Bash(vercel ls:*)",
+      "Bash(python -c \"from core import notifier; notifier.mac_push\\(''NEØ Teste'', ''Entregável 1 funcionando'', sound=True\\)\")",
+      "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/python -c \"from core import notifier; notifier.mac_push\\(''''NEØ Teste'''', ''''Entregável 1 funcionando'''', sound=True\\)\")",
+      "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/python -c \"from core import notifier; notifier.mac_push\\(''NEØ Teste'', ''Entregável 1 funcionando'', sound=True\\)\")",
+      "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/python -c \"from core import notifier; notifier.mac_push\\(''NEØ Teste'', ''Olha aqui! Entregável 1 ok'', sound=True\\)\")",
+      "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/python -c \"from core import notifier; notifier.mac_push\\(''NEO Teste'', ''Entregavel 1 ok'', sound=True\\)\")",
+      "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/python main.py vida)",
+      "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/pip install:*)",
+      "Bash(grep -v \"^\\\\s*$\")",
+      "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/python -c \":*)",
+      "Bash(find /Users/nettomello/CODIGOS/multiagentes -maxdepth 2 -not -path */venv/* -not -path */__pycache__/* -not -path */.git/* -newer /Users/nettomello/CODIGOS/multiagentes/ROADMAP.md -name *.py -o -name *.md -o -name *.json -o -name *.toml)",
+      "Bash(printf '\\\\n# ---------------------------------------------------------------------------\\\\n# Sanity.io — prompts, personas e configs de agentes\\\\n# ---------------------------------------------------------------------------\\\\nSANITY_PROJECT_ID=\\\\nSANITY_DATASET=production\\\\nSANITY_API_TOKEN=\\\\nSANITY_USE_CDN=false\\\\n')",
+      "Bash(mkdir -p /Users/nettomello/CODIGOS/multiagentes/sanity)",
+      "Bash(npm create:*)",
+      "mcp__Sanity__list_projects",
+      "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/python -m py_compile core/notifier.py core/sanity_client.py agents/focus_guard.py agents/life_guard.py main.py)"
     ]
   }
 }

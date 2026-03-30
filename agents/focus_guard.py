@@ -33,6 +33,14 @@ from core.openai_utils import chat_completions
 
 AGENT_NAME = "focus_guard"
 
+# Níveis de escalada por tempo de sessão
+ESCALATION_LEVELS = [
+    {"minutes": 30,  "channel": "mac",       "sound": False, "msg": "30 min em {task}. Planejado: {planned}min."},
+    {"minutes": 60,  "channel": "mac",       "sound": True,  "msg": "1 hora em {task}. Hora de checar."},
+    {"minutes": 120, "channel": "mac+alexa", "sound": True,  "msg": "2 horas em {task}. Para agora."},
+    {"minutes": 240, "channel": "mac+alexa", "sound": True,  "msg": "4 horas. Sai do computador por 10 minutos."},
+]
+
 # Estado interno do Focus Guard
 _state_key = "focus_guard_state"
 _stop_event = threading.Event()
@@ -157,6 +165,28 @@ def analyze_with_llm(progress: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Escalada por tempo de sessão
+# ---------------------------------------------------------------------------
+
+
+def _check_escalation(session_minutes: int, task_title: str, planned_minutes: int) -> None:
+    """Dispara notificação no canal certo baseado no tempo de sessão."""
+    today = datetime.now().date()
+    for level in ESCALATION_LEVELS:
+        state_key = f"escalation:{today}:{task_title}:{level['minutes']}"
+        if memory.get_state(state_key):
+            continue
+        if session_minutes >= level["minutes"]:
+            msg = level["msg"].format(task=task_title, planned=planned_minutes)
+            if "mac" in level["channel"]:
+                notifier.mac_push("NEO Focus Guard", msg, sound=level["sound"])
+            if "alexa" in level["channel"]:
+                notifier.alexa_announce(msg)
+            memory.set_state(state_key, "sent")
+            break  # só um nível por check
+
+
+# ---------------------------------------------------------------------------
 # Loop de verificação periódica
 # ---------------------------------------------------------------------------
 
@@ -258,6 +288,16 @@ def _run_focus_check(
             f"Sessão ativa: '{active.get('task_title')}' desde {started[:16]}",
             AGENT_NAME,
         )
+        try:
+            started_dt = datetime.fromisoformat(started)
+            session_minutes = int((datetime.now() - started_dt).total_seconds() / 60)
+            _check_escalation(
+                session_minutes=session_minutes,
+                task_title=active.get("task_title", "?"),
+                planned_minutes=active.get("planned_minutes", 25),
+            )
+        except Exception:
+            pass
 
     # Mensagem de análise
     deviation = analysis.get("deviation_level", "none")
@@ -311,6 +351,13 @@ def _run_focus_check(
                 f"{action.get('new_block_date')} {action.get('new_time_slot')}",
                 AGENT_NAME,
             )
+
+    # Life Guard — rotinas pessoais
+    try:
+        from agents import life_guard as _life_guard
+        _life_guard.run_all_checks()
+    except Exception as e:
+        notifier.warning(f"Life Guard check ignorado: {e}", AGENT_NAME)
 
     notifier.separator()
     return {"progress": progress, "analysis": analysis}

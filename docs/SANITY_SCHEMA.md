@@ -1,4 +1,5 @@
 # SANITY.IO — Schema e Integração
+
 **Status:** Pronto para criar no Studio
 **Projeto Sanity:** criar em sanity.io/manage
 **Dataset:** `production`
