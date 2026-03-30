@@ -87,7 +87,8 @@
       "Bash(mkdir -p /Users/nettomello/CODIGOS/multiagentes/sanity)",
       "Bash(npm create:*)",
       "mcp__Sanity__list_projects",
-      "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/python -m py_compile core/notifier.py core/sanity_client.py agents/focus_guard.py agents/life_guard.py main.py)"
+      "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/python -m py_compile core/notifier.py core/sanity_client.py agents/focus_guard.py agents/life_guard.py main.py)",
+      "mcp__Sanity__publish_documents"
     ]
   }
 }

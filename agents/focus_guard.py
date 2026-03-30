@@ -28,7 +28,7 @@ from config import (
     FOCUS_CHECK_INTERVAL_MINUTES,
     NOTION_SYNC_INTERVAL_MINUTES,
 )
-from core import memory, notifier
+from core import memory, notifier, sanity_client
 from core.openai_utils import chat_completions
 
 AGENT_NAME = "focus_guard"
@@ -48,7 +48,7 @@ _guard_thread: Optional[threading.Thread] = None
 
 
 # Prompt para análise de desvio via LLM
-DEVIATION_PROMPT = """Você é o Focus Guard, um agente que monitora o progresso de tarefas pessoais.
+_DEVIATION_PROMPT_FALLBACK = """Você é o Focus Guard, um agente que monitora o progresso de tarefas pessoais.
 Analise os dados fornecidos e determine:
 1. Se o usuário está dentro do plano (on-track) ou desviou
 2. Se houve desvio, qual a gravidade (leve/moderado/grave)
@@ -62,6 +62,9 @@ Retorne JSON com:
   "recommendation": "ação recomendada"
 }
 """
+
+def _get_deviation_prompt() -> str:
+    return sanity_client.get_prompt("focus_guard", "deviation", _DEVIATION_PROMPT_FALLBACK)
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +140,7 @@ def analyze_with_llm(progress: dict) -> dict:
     try:
         response = chat_completions(
             messages=[
-                {"role": "system", "content": DEVIATION_PROMPT},
+                {"role": "system", "content": _get_deviation_prompt()},
                 {"role": "user", "content": f"Dados de progresso:\n{progress_str}"},
             ],
             temperature=0.6,

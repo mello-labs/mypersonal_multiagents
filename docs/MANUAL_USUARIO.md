@@ -79,6 +79,7 @@ O app tem 5 abas na parte inferior:
 ## Notificacoes
 
 O app esta preparado para push notifications. Quando ativadas, voce recebera alertas de:
+
 - Proximo compromisso em 15 min / 5 min
 - Bloco atrasado
 - Reagendamento automatico
