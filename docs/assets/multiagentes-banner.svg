@@ -1,38 +1,102 @@
-<svg width="1200" height="420" viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="420" fill="#09131A"/>
-  <rect x="34" y="34" width="1132" height="352" rx="24" fill="url(#bg)"/>
-  <rect x="34" y="34" width="1132" height="352" rx="24" stroke="#6EE7F9" stroke-opacity="0.25"/>
+<svg width="1400" height="560" viewBox="0 0 1400 560" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Arquitetura Multiagentes</title>
+  <desc>Mapa operacional do ecossistema mypersonal_multiagents com entradas, kernel privado, Redis, Sanity, Gemma local e superfície pública.</desc>
 
-  <circle cx="188" cy="210" r="84" fill="#0B202A" stroke="#6EE7F9" stroke-opacity="0.5" stroke-width="2"/>
-  <circle cx="188" cy="210" r="52" fill="#102B36" stroke="#D7FF64" stroke-opacity="0.7" stroke-width="2"/>
-  <circle cx="188" cy="210" r="20" fill="#D7FF64"/>
+  <rect width="1400" height="560" fill="#09131A"/>
+  <rect x="24" y="24" width="1352" height="512" rx="28" fill="url(#bg)" stroke="#6EE7F9" stroke-opacity="0.22"/>
 
-  <path d="M240 152H356" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
-  <path d="M240 210H356" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
-  <path d="M240 268H356" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
+  <text x="54" y="72" fill="#6EE7F9" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18" letter-spacing="2">NEO OPERATING MAP</text>
+  <text x="54" y="116" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="40" font-weight="700">multiagentes</text>
+  <text x="54" y="146" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18">Kernel privado de operação pessoal, memória quente e governança semântica</text>
 
-  <rect x="384" y="110" width="292" height="200" rx="18" fill="#08171F" stroke="#6EE7F9" stroke-opacity="0.35"/>
-  <text x="418" y="156" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="20">orchestrator()</text>
-  <text x="418" y="202" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="20">focus_guard()</text>
-  <text x="418" y="248" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="20">scheduler()</text>
-  <text x="418" y="284" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">validate(), sync(), audit()</text>
+  <path d="M1120 48V512" stroke="#6EE7F9" stroke-opacity="0.18" stroke-dasharray="8 8"/>
+  <text x="1060" y="74" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">PUBLICAR SO APOS REVISAO</text>
 
-  <path d="M676 210H760" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
-  <path d="M747 197L760 210L747 223" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="54" y="186" width="220" height="248" rx="18" fill="#08171F" stroke="#6EE7F9" stroke-opacity="0.28"/>
+  <text x="82" y="224" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="20">ENTRADAS</text>
+  <rect x="82" y="246" width="164" height="42" rx="10" fill="#0F2430"/>
+  <text x="106" y="272" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">Notion</text>
+  <rect x="82" y="300" width="164" height="42" rx="10" fill="#0F2430"/>
+  <text x="106" y="326" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">Notion Agenda</text>
+  <rect x="82" y="354" width="164" height="42" rx="10" fill="#0F2430"/>
+  <text x="106" y="380" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">CLI / Home UI</text>
+  <rect x="82" y="408" width="164" height="42" rx="10" fill="#0F2430"/>
+  <text x="106" y="434" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">Railway Runtime</text>
 
-  <rect x="778" y="102" width="314" height="216" rx="18" fill="#08171F" stroke="#D7FF64" stroke-opacity="0.45"/>
-  <text x="812" y="148" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="22">REDIS MEMORY</text>
-  <text x="812" y="192" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18">agenda persistence</text>
-  <text x="812" y="224" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18">notion sync</text>
-  <text x="812" y="256" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18">calendar import</text>
-  <text x="812" y="288" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18">audit trail</text>
+  <path d="M274 267H346" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
+  <path d="M333 254L346 267L333 280" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M274 321H346" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
+  <path d="M333 308L346 321L333 334" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M274 375H346" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
+  <path d="M333 362L346 375L333 388" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <text x="86" y="86" fill="#6EE7F9" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18" letter-spacing="2">PERSONAL SYSTEM</text>
-  <text x="84" y="346" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="44" font-weight="700">multiagentes</text>
-  <text x="84" y="376" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18">Autonomous operating layer for agenda, focus, sync, and memory</text>
+  <rect x="346" y="170" width="390" height="286" rx="22" fill="#08171F" stroke="#6EE7F9" stroke-opacity="0.35"/>
+  <text x="378" y="212" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="22">MYPERSONAL_MULTIAGENTS</text>
+  <text x="378" y="236" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">kernel privado · decisao · sync · foco · validacao</text>
+
+  <rect x="378" y="258" width="150" height="36" rx="10" fill="#102B36"/>
+  <text x="398" y="281" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">orchestrator()</text>
+  <rect x="546" y="258" width="158" height="36" rx="10" fill="#102B36"/>
+  <text x="566" y="281" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">focus_guard()</text>
+
+  <rect x="378" y="308" width="150" height="36" rx="10" fill="#102B36"/>
+  <text x="405" y="331" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">scheduler()</text>
+  <rect x="546" y="308" width="158" height="36" rx="10" fill="#102B36"/>
+  <text x="579" y="331" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">validator()</text>
+
+  <rect x="378" y="358" width="150" height="36" rx="10" fill="#102B36"/>
+  <text x="393" y="381" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">notion_sync()</text>
+  <rect x="546" y="358" width="158" height="36" rx="10" fill="#102B36"/>
+  <text x="563" y="381" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">agenda_sync()</text>
+
+  <text x="378" y="422" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">life_guard() · retrospective() · persona_manager()</text>
+
+  <rect x="346" y="468" width="390" height="42" rx="14" fill="#0E2029" stroke="#D7FF64" stroke-opacity="0.28"/>
+  <text x="376" y="494" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">notificacoes: mac local · alexa · audit trail · alertas</text>
+
+  <rect x="784" y="170" width="284" height="122" rx="22" fill="#08171F" stroke="#D7FF64" stroke-opacity="0.42"/>
+  <text x="814" y="208" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="22">REDIS</text>
+  <text x="814" y="238" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">estado quente</text>
+  <text x="814" y="264" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">agenda · tasks · sessoes · alerts · audit</text>
+
+  <rect x="784" y="314" width="284" height="142" rx="22" fill="#08171F" stroke="#6EE7F9" stroke-opacity="0.35"/>
+  <text x="814" y="352" fill="#6EE7F9" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="22">SANITY</text>
+  <text x="814" y="382" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">governanca e camada semantica</text>
+  <text x="814" y="408" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">agent_config · persona · prompt · intervention_script</text>
+  <text x="814" y="432" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">depois: task · block · signal · decision · source</text>
+
+  <path d="M736 230H784" stroke="#D7FF64" stroke-width="3" stroke-linecap="round"/>
+  <path d="M771 217L784 230L771 243" stroke="#D7FF64" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M784 385H736" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
+  <path d="M749 372L736 385L749 398" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="742" y="343" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">governa</text>
+
+  <rect x="382" y="84" width="184" height="54" rx="14" fill="#0E2029" stroke="#6EE7F9" stroke-opacity="0.28"/>
+  <text x="408" y="117" fill="#6EE7F9" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18">Gemma local</text>
+  <text x="570" y="116" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">fallback · triagem</text>
+  <path d="M474 138V170" stroke="#6EE7F9" stroke-width="2.5" stroke-dasharray="7 7"/>
+
+  <rect x="1150" y="182" width="180" height="96" rx="18" fill="#08171F" stroke="#D7FF64" stroke-opacity="0.42"/>
+  <text x="1176" y="218" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="20">PUBLISH GATE</text>
+  <text x="1176" y="245" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">revisao humana</text>
+  <text x="1176" y="266" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">public_artifact</text>
+
+  <rect x="1150" y="318" width="180" height="138" rx="18" fill="#08171F" stroke="#6EE7F9" stroke-opacity="0.35"/>
+  <text x="1174" y="354" fill="#6EE7F9" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="20">PUBLIC LAYER</text>
+  <text x="1174" y="381" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">neo-mello-eth</text>
+  <text x="1174" y="404" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">nettomello.eth.limo</text>
+  <text x="1174" y="427" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">ENS · IPFS · IPNI</text>
+
+  <path d="M1068 385H1150" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
+  <path d="M1137 372L1150 385L1137 398" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M1240 278V318" stroke="#D7FF64" stroke-width="3" stroke-linecap="round"/>
+  <path d="M1227 305L1240 318L1253 305" stroke="#D7FF64" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="52" y="500" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">Fluxo privado: Notion Tasks / Notion Agenda / UI → kernel → Redis ↔ Sanity</text>
+  <text x="52" y="524" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">Fluxo publico: Sanity → Publish Gate → neo-mello-eth → ENS / IPFS</text>
 
   <defs>
-    <linearGradient id="bg" x1="62" y1="48" x2="1124" y2="372" gradientUnits="userSpaceOnUse">
+    <linearGradient id="bg" x1="42" y1="32" x2="1340" y2="528" gradientUnits="userSpaceOnUse">
       <stop stop-color="#10222D"/>
       <stop offset="1" stop-color="#0B151C"/>
     </linearGradient>

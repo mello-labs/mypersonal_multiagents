@@ -41,7 +41,7 @@ O app tem 5 abas na parte inferior:
 ## Agenda
 
 - Filtre por intervalo de datas usando os campos de data e o botao **Filtrar**
-- Importe blocos do **Notion** ou **Google Calendar** no intervalo selecionado
+- Importe blocos do **Notion** como fonte principal ou do **Google Calendar** como fonte opcional no intervalo selecionado
 - Cada bloco mostra status: aberto, concluido ou reagendado
 
 ## Tarefas

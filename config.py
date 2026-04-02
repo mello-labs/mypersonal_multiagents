@@ -76,7 +76,7 @@ NOTION_SYNC_INTERVAL_MINUTES: int = int(os.getenv("NOTION_SYNC_INTERVAL", "5"))
 NOTION_RETROSPECTIVE_PAGE_ID: str = os.getenv("NOTION_RETROSPECTIVE_PAGE_ID", "")
 
 # ---------------------------------------------------------------------------
-# Google Calendar
+# Google Calendar opcional
 # ---------------------------------------------------------------------------
 GOOGLE_CREDENTIALS_FILE: str = os.getenv(
     "GOOGLE_CREDENTIALS_FILE", str(BASE_DIR / "credentials.json")

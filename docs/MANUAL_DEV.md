@@ -156,9 +156,9 @@ LOG_LEVEL=               # DEBUG/INFO/WARNING/ERROR
 WEB_HOST=                # Host do FastAPI (default: 127.0.0.1)
 WEB_PORT=                # Porta do FastAPI (default: 8000)
 
-# Google Calendar
-GOOGLE_CREDENTIALS_FILE= # OAuth credentials
-GOOGLE_TOKEN_FILE=       # Token OAuth
+# Google Calendar opcional
+GOOGLE_CREDENTIALS_FILE= # OAuth credentials para integração opcional
+GOOGLE_TOKEN_FILE=       # Token OAuth para integração opcional
 
 # Sanity.io
 SANITY_PROJECT_ID=       # Project ID

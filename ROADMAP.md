@@ -1,7 +1,7 @@
 # Roadmap — Sistema de Multiagentes para Gestão Pessoal
 
 **Atualizado em:** 30/03/2026
-**Estado atual:** v0.3 — Fase 2 operacional (Web UI + 10 agentes + Redis + Notion + Google Calendar + Sanity)
+**Estado atual:** v0.3 — Fase 2 operacional (Web UI + 10 agentes + Redis + Notion como origem principal + Google Calendar opcional + Sanity)
 
 ---
 
@@ -88,9 +88,9 @@ PWA completa com 5 tabs:
 
 Detalhes em `docs/MANUAL_DEV.md` e `docs/MANUAL_USUARIO.md`.
 
-### 2.4 Google Calendar ✅ concluída
+### 2.4 Google Calendar opcional ✅ concluída
 
-`agents/calendar_sync.py` — OAuth 2.0 completo, importa eventos como blocos de agenda, respeita timezone local.
+`agents/calendar_sync.py` — OAuth 2.0 completo, importa eventos como blocos de agenda, respeita timezone local. Mantido como integração opcional, com Notion Agenda como fonte primária de operação.
 
 Acionado via `python main.py calendar auth|import|status` ou `make calendar-auth|calendar-import`.
 
@@ -211,7 +211,7 @@ Focus Guard envia via webhook quando detecta desvio severo.
 | SDK de agentes | OpenAI client via `core/openai_utils.py` | `openai-agents` SDK oficial |
 | Focus Guard | Thread daemon no processo web | Processo systemd/launchd dedicado |
 | Interface | CLI + Web (FastAPI + HTMX + PWA) | PWA com push notifications |
-| Fonte de agenda | Notion + Google Calendar | + Linear/Jira |
+| Fonte de agenda | Notion (principal) + Google Calendar (opcional) | + Linear/Jira |
 | Observabilidade | Logs em arquivo + audit trail Redis | OpenTelemetry + Jaeger |
 | Alertas | Terminal + macOS push + Alexa (Voice Monkey/IFTTT) | + Slack/Discord webhook |
 | Testes | pytest (5 modules) | + integration tests + coverage gate |

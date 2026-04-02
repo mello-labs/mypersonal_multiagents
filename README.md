@@ -10,8 +10,9 @@
 
 Sistema multiagentes para gestão pessoal
 com orquestração por IA, agenda local
-persistida em Redis, sync com Notion,
-integração com Google Calendar, Sanity.io
+persistida em Redis, sync com Notion
+como origem principal, Google Calendar
+como capacidade opcional, Sanity.io
 e monitoramento autônomo de foco.
 
 > **Status:** Fase 2 operacional
@@ -52,8 +53,9 @@ execução, validação e memória.
 ┃      com databases do Notion
 ┃
 ┃ Calendar Sync
-┃   └─ importa eventos do Google
-┃      Calendar para blocos locais
+┃   └─ integra Google Calendar
+┃      como fonte opcional de
+┃      importação e exportação
 ┃
 ┃ Validator
 ┃   └─ valida conclusão de tarefas
@@ -99,7 +101,7 @@ Usuário
        ├─ Focus Guard
        │    └─ Life Guard (rotinas)
        ├─ Notion Sync
-       ├─ Calendar Sync
+       ├─ Calendar Sync (opcional)
        ├─ Validator
        ├─ Retrospective
        └─ Persona Manager
@@ -149,10 +151,10 @@ make test-q
 ┃                      e automação
 ┃ Redis                persistência
 ┃                      operacional
-┃ Notion               fonte externa
-┃                      de tarefas
-┃ Google Calendar      importação de
-┃                      eventos
+┃ Notion               fonte principal
+┃                      de tarefas e agenda
+┃ Google Calendar      capacidade
+┃                      opcional de agenda
 ┃ Sanity Studio        prompts, personas
 ┃                      e configs externas
 ┃ macOS Push + Alexa   notificações de
@@ -173,7 +175,7 @@ multiagentes/
 │   ├── focus_guard.py       monitor de foco, escalada e auto-reschedule
 │   ├── scheduler.py         agenda e blocos
 │   ├── notion_sync.py       sync com Notion (bidirecional)
-│   ├── calendar_sync.py     sync com Google Calendar
+│   ├── calendar_sync.py     integração opcional com Google Calendar
 │   ├── validator.py         validação de conclusão
 │   ├── retrospective.py     retrospectiva semanal
 │   ├── life_guard.py        rotinas pessoais (hidratação, exercício, finanças)
@@ -250,8 +252,8 @@ multiagentes/
 | Integração      | Papel                                | Variáveis principais                                                 |
 | --------------- | ------------------------------------ | -------------------------------------------------------------------- |
 | OpenAI          | roteamento e síntese do orchestrator | `OPENAI_API_KEY`, `OPENAI_MODEL`                                     |
-| Notion          | sync de tarefas e agenda             | `NOTION_TOKEN`, `NOTION_TASKS_DB_ID`, `NOTION_AGENDA_DB_ID`          |
-| Google Calendar | importação de eventos                | `GOOGLE_CREDENTIALS_FILE`, `GOOGLE_TOKEN_FILE`, `GOOGLE_CALENDAR_ID` |
+| Notion          | fonte principal de tarefas e agenda  | `NOTION_TOKEN`, `NOTION_TASKS_DB_ID`, `NOTION_AGENDA_DB_ID`          |
+| Google Calendar | integração opcional de agenda        | `GOOGLE_CREDENTIALS_FILE`, `GOOGLE_TOKEN_FILE`, `GOOGLE_CALENDAR_ID` |
 | Sanity.io       | prompts, personas, configs externas  | `SANITY_PROJECT_ID`, `SANITY_API_TOKEN`, `SANITY_DATASET`            |
 | Voice Monkey    | anúncios na Alexa (primário)         | `VOICE_MONKEY_TOKEN`, `VOICE_MONKEY_DEVICE`, `VOICE_MONKEY_VOICE`    |
 | IFTTT           | anúncios na Alexa (fallback)         | `IFTTT_WEBHOOK_KEY`, `IFTTT_ALEXA_EVENT`                             |
@@ -336,8 +338,8 @@ WEB_PORT=8000
 ┃ make tasks             lista tarefas
 ┃ make vida              status rotinas pessoais
 ┃ make retro             retrospectiva semanal
-┃ make calendar-auth     OAuth Google Calendar
-┃ make calendar-import   importa eventos
+┃ make calendar-auth     OAuth Google Calendar opcional
+┃ make calendar-import   importa eventos opcionais
 ┃ make test-q            testes rápidos
 ┃ make check             lint + testes
 ┃ make web               inicia interface web
@@ -365,9 +367,9 @@ python main.py web                 # Inicia interface web
 python main.py vida                # Status das rotinas pessoais
 python main.py fiz <rotina>        # Confirma rotina (exercicio|banho|almoco|jantar)
 python main.py pagar <args>        # Registra conta a pagar
-python main.py calendar auth       # Autoriza Google Calendar
-python main.py calendar import     # Importa eventos de hoje
-python main.py calendar status     # Status da integração
+python main.py calendar auth       # Autoriza Google Calendar opcional
+python main.py calendar import     # Importa eventos opcionais de hoje
+python main.py calendar status     # Status da integração opcional
 ```
 
 ────────────────────────────────────────

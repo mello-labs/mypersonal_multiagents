@@ -295,7 +295,7 @@ Risco atual:
 Arquivo: `agents/calendar_sync.py`
 
 Função:
-- integrar Google Calendar à agenda operacional
+- integrar Google Calendar à agenda operacional como capacidade opcional
 
 Entradas:
 - eventos do calendário
@@ -309,7 +309,7 @@ Memória:
 - lê e escreve Redis
 
 Autoridade:
-- pode espelhar agenda
+- pode espelhar agenda quando a integração opcional estiver ativa
 - não interpreta prioridade nem intenção
 - não publica
 
@@ -317,13 +317,14 @@ Governança desejada no Sanity:
 - parâmetros operacionais
 - política de import/export
 - mapeamento de calendário
+  com precedência explícita do Notion Agenda
 
 Estado atual:
 - não usa LLM
 - nem sequer está representado de forma completa no Studio atual
 
 Risco atual:
-- integração importante ainda vive fora da camada de governança
+- integração opcional ainda vive fora da camada de governança
 
 ### `life_guard`
 

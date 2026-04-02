@@ -555,9 +555,9 @@ def cmd_web() -> None:
 
 
 def cmd_calendar_auth() -> None:
-    """Autoriza o Google Calendar."""
+    """Autoriza a integração opcional com Google Calendar."""
     from agents import calendar_sync
-    notifier.info("Iniciando fluxo de autorização do Google Calendar...", "calendar")
+    notifier.info("Iniciando fluxo de autorização da integração opcional com Google Calendar...", "calendar")
     notifier.info("O browser será aberto para autorização.", "calendar")
     if calendar_sync.authorize():
         notifier.success("Autorização concluída! Use 'calendar import' para importar eventos.")
@@ -566,14 +566,14 @@ def cmd_calendar_auth() -> None:
 
 
 def cmd_calendar_import() -> None:
-    """Importa eventos de hoje do Google Calendar."""
+    """Importa eventos de hoje da integração opcional com Google Calendar."""
     from agents import calendar_sync
     count = calendar_sync.import_today_as_blocks()
     notifier.success(f"{count} evento(s) importados como blocos de agenda.")
 
 
 def cmd_calendar_status() -> None:
-    """Status da integração com o Google Calendar."""
+    """Status da integração opcional com o Google Calendar."""
     from agents import calendar_sync
     notifier.separator("GOOGLE CALENDAR STATUS")
     notifier.info(f"Autorizado: {calendar_sync.is_authorized()}", "calendar")
@@ -668,11 +668,11 @@ Exemplos:
     fiz_parser.add_argument("rotina", nargs="?", default="")
 
     # calendar
-    calendar_parser = subparsers.add_parser("calendar", help="Gerencia integração com Google Calendar")
+    calendar_parser = subparsers.add_parser("calendar", help="Gerencia integração opcional com Google Calendar")
     cal_sub = calendar_parser.add_subparsers(dest="calendar_action", metavar="AÇÃO")
-    cal_sub.add_parser("auth",   help="Autoriza acesso ao Google Calendar")
-    cal_sub.add_parser("import", help="Importa eventos de hoje como blocos de agenda")
-    cal_sub.add_parser("status", help="Status da integração com o Calendar")
+    cal_sub.add_parser("auth",   help="Autoriza acesso opcional ao Google Calendar")
+    cal_sub.add_parser("import", help="Importa eventos opcionais de hoje como blocos de agenda")
+    cal_sub.add_parser("status", help="Status da integração opcional com o Calendar")
 
     return parser
 

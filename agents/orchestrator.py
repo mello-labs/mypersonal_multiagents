@@ -92,7 +92,7 @@ AGENTS_REGISTRY = {
         "actions": ["run", "metrics_only"],
     },
     "calendar_sync": {
-        "description": "Sincroniza agenda com Google Calendar — importa eventos e exporta blocos.",
+        "description": "Integra Google Calendar como capacidade opcional de agenda — importa eventos e exporta blocos quando ativado.",
         "actions": [
             "import_today",
             "fetch_today",
