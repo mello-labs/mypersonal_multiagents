@@ -106,5 +106,5 @@ def validate_config() -> list[str]:
         warnings.append(
             "NOTION_AGENDA_DB_ID não configurada — "
             "sincronização de agenda desabilitada."
-        )
+     )
     return warnings

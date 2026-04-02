@@ -88,7 +88,32 @@
       "Bash(npm create:*)",
       "mcp__Sanity__list_projects",
       "Bash(/Users/nettomello/CODIGOS/multiagentes/venv/bin/python -m py_compile core/notifier.py core/sanity_client.py agents/focus_guard.py agents/life_guard.py main.py)",
-      "mcp__Sanity__publish_documents"
+      "mcp__Sanity__publish_documents",
+      "Bash(source ~/.zshrc)",
+      "Bash(/usr/local/bin/docker --version)",
+      "Bash(/opt/homebrew/bin/ollama --version)",
+      "Bash(/usr/local/bin/docker model:*)",
+      "Bash(curl -s http://localhost:12434/engines/llama.cpp/v1/models)",
+      "Bash(curl -sv http://localhost:12434/engines/llama.cpp/v1/models)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\({k:v for k,v in d.items\\(\\) if ''''model'''' in k.lower\\(\\) or ''''runner'''' in k.lower\\(\\) or ''''ai'''' in k.lower\\(\\)}\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in sorted\\(d.keys\\(\\)\\)]\")",
+      "Bash(curl -s http://localhost:12434/v1/models 2)",
+      "Bash(1 curl:*)",
+      "Bash(1 /usr/local/bin/docker model run --help)",
+      "Bash(python3 -c \":*)",
+      "Bash(venv/bin/pip install:*)",
+      "Bash(venv/bin/python3 -c \":*)",
+      "Bash(ls venv/bin/python*)",
+      "Bash(python3 -m pip list)",
+      "Bash(python3.11 -c \"import openai, httpx; print\\(''ok''\\)\")",
+      "Bash(/opt/homebrew/bin/python3 -c \"import openai, httpx; print\\(''ok''\\)\")",
+      "Bash(python3.12 -c \"import openai, httpx; print\\(''ok''\\)\")",
+      "Bash(python3.12 -m venv venv)",
+      "Bash(python3.11 -m venv venv)",
+      "Bash(/opt/homebrew/bin/python3 -m venv venv)",
+      "Bash(venv/bin/python --version)",
+      "Bash(venv/bin/python -c \":*)",
+      "Bash(ls /Users/nettomello/Library/Containers/com.docker.docker/Data/inference*.sock)"
     ]
   }
 }
