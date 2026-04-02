@@ -47,18 +47,24 @@ NOTION_API_VERSION: str = "2022-06-28"
 BASE_DIR = Path(__file__).parent
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 # Mantido para compatibilidade com scripts antigos (não usado com Redis)
-MEMORY_DB_PATH: str = os.getenv("MEMORY_DB_PATH", str(BASE_DIR / "memory.db"))
+MEMORY_DB_PATH: str = os.getenv(
+    "MEMORY_DB_PATH", str(BASE_DIR / "memory.db")
+)
 
 # ---------------------------------------------------------------------------
 # Focus Guard
 # ---------------------------------------------------------------------------
 # Intervalo (em minutos) entre verificações automáticas do Focus Guard
-FOCUS_CHECK_INTERVAL_MINUTES: int = int(os.getenv("FOCUS_CHECK_INTERVAL", "15"))
+FOCUS_CHECK_INTERVAL_MINUTES: int = int(
+    os.getenv("FOCUS_CHECK_INTERVAL", "15")
+)
 
 # ---------------------------------------------------------------------------
 # Logging / Notificações
 # ---------------------------------------------------------------------------
-LOG_FILE: str = os.getenv("LOG_FILE", str(BASE_DIR / "logs" / "agent_system.log"))
+LOG_FILE: str = os.getenv(
+    "LOG_FILE", str(BASE_DIR / "logs" / "agent_system.log")
+)
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
 # ---------------------------------------------------------------------------

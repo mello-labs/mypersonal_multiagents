@@ -46,6 +46,22 @@ class TestTasks:
         assert task["status"] == "Concluído"
         assert task["actual_time"] == "14:30"
 
+    def test_update_task_campos_gerais(self, mem):
+        task_id = mem.create_task("Tarefa original", priority="Baixa")
+        mem.update_task(
+            task_id,
+            title="Tarefa atualizada",
+            priority="Alta",
+            scheduled_time="11:00",
+            notion_page_id="page-42",
+        )
+
+        task = mem.get_task(task_id)
+        assert task["title"] == "Tarefa atualizada"
+        assert task["priority"] == "Alta"
+        assert task["scheduled_time"] == "11:00"
+        assert task["notion_page_id"] == "page-42"
+
     def test_list_all_tasks(self, mem):
         mem.create_task("Tarefa A")
         mem.create_task("Tarefa B")

@@ -155,6 +155,39 @@ class TestCreateNotionTask:
 
 
 class TestAgendaSync:
+    def test_sync_tasks_to_local_atualiza_tarefa_existente(self, mem):
+        from agents import notion_sync
+
+        task_id = mem.create_task(
+            "Troia antiga",
+            priority="Baixa",
+            scheduled_time="09:00",
+            notion_page_id="page-123",
+        )
+
+        with patch.object(
+            notion_sync,
+            "fetch_notion_tasks",
+            return_value=[
+                {
+                    "notion_page_id": "page-123",
+                    "title": "Troia",
+                    "status": "Em progresso",
+                    "priority": "Alta",
+                    "scheduled_time": "11h",
+                    "actual_time": "",
+                }
+            ],
+        ):
+            count = notion_sync.sync_tasks_to_local()
+
+        task = mem.get_task(task_id)
+        assert count == 0
+        assert task["title"] == "Troia"
+        assert task["status"] == "Em progresso"
+        assert task["priority"] == "Alta"
+        assert task["scheduled_time"] == "11h"
+
     def test_maybe_create_agenda_block_cria_bloco_local(self, mem):
         from agents import notion_sync
 

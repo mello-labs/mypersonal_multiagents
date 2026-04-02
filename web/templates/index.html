@@ -6,16 +6,17 @@
 {% set f = summary.focus %}
 {% set a = summary.agenda_today %}
 {% set al = summary.alerts %}
+{% set tv = task_overview %}
 
 {# ── Greeting ── #}
 <div class="section-title" id="greeting"></div>
 
 {# ── Metrics ── #}
-<div id="stats-row" class="metrics">
+<div id="stats-row" class="metrics" hx-get="/status" hx-trigger="every 20s" hx-swap="outerHTML">
   <div class="metric m-blue">
-    <div class="metric-lbl">A fazer</div>
-    <div class="metric-val v-blue">{{ t.a_fazer }}</div>
-    <div class="metric-sub">{{ t.em_progresso }} em prog &middot; {{ t.concluido }} feitas</div>
+    <div class="metric-lbl">Pendentes</div>
+    <div class="metric-val v-blue">{{ tv.pending_count }}</div>
+    <div class="metric-sub">{{ tv.overdue_count }} atrasada{{ 's' if tv.overdue_count != 1 else '' }} &middot; {{ tv.in_progress_count }} em prog</div>
   </div>
   <div class="metric m-green">
     <div class="metric-lbl">Agenda</div>
@@ -45,7 +46,7 @@
     <button class="card-act" hx-get="/agenda" hx-target="#agenda-body"
             hx-swap="innerHTML" aria-label="Atualizar">Atualizar</button>
   </div>
-  <div id="agenda-body">
+  <div id="agenda-body" hx-get="/agenda" hx-trigger="every 20s" hx-swap="innerHTML">
     {% include "partials/agenda.html" %}
   </div>
 </div>
@@ -56,7 +57,7 @@
     <span class="card-lbl">Tarefas</span>
     <a href="/tasks-page" class="card-act">Ver todas &rsaquo;</a>
   </div>
-  <div id="tasks-body">
+  <div id="tasks-body" hx-get="/tasks" hx-trigger="every 20s" hx-swap="innerHTML">
     {% include "partials/tasks.html" %}
   </div>
 </div>

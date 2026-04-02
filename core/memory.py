@@ -215,6 +215,31 @@ def update_task_status(
         r.hset(key, "actual_time", actual_time)
 
 
+def update_task(task_id: int, **fields: Any) -> None:
+    """Atualiza campos arbitrários de uma tarefa existente."""
+    r = _r()
+    mapping = {}
+    notion_page_id = None
+
+    for key, value in fields.items():
+        if key == "id":
+            continue
+        if key == "notion_page_id":
+            notion_page_id = value
+        if value is None:
+            mapping[key] = ""
+        else:
+            mapping[key] = str(value)
+
+    if not mapping:
+        return
+
+    mapping["updated_at"] = _now()
+    r.hset(f"task:{task_id}", mapping=mapping)
+    if notion_page_id:
+        r.set(f"tasks:notion:{notion_page_id}", task_id)
+
+
 def get_task(task_id: int) -> Optional[dict]:
     data = _r().hgetall(f"task:{task_id}")
     if not data:

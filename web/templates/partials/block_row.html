@@ -1,6 +1,16 @@
 <div class="blk{{ ' done' if b.completed else '' }}" id="ab-{{ b.id }}">
   <span class="blk-time">{{ b.time_slot }}</span>
-  <span class="blk-name{{ ' blk-done' if b.completed else '' }}">{{ b.task_title or '—' }}</span>
+  <div class="blk-main">
+    <div class="blk-head">
+      <span class="blk-name{{ ' blk-done' if b.completed else '' }}">{{ b.task_title or '—' }}</span>
+      <span class="badge {{ b.display_state_class or 'badge-def' }}">{{ b.display_state_label or 'Aberto' }}</span>
+    </div>
+    {% if b.rescheduled_to_block_id %}
+    <div class="blk-meta">Reagendado para o bloco #{{ b.rescheduled_to_block_id }}</div>
+    {% elif b.is_overdue %}
+    <div class="blk-meta">Bloco vencido e aguardando conclusão</div>
+    {% endif %}
+  </div>
   {% if not b.completed %}
   <button class="blk-btn"
           hx-post="/block/{{ b.id }}/complete"

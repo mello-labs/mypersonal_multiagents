@@ -2,14 +2,15 @@
 {% set f = summary.focus %}
 {% set a = summary.agenda_today %}
 {% set al = summary.alerts %}
+{% set tv = task_overview %}
 
 <div id="stats-row" style="display:contents">
 
   <div class="tile gc-1 gr-1">
-    <div class="tile-hd"><span class="tile-lbl">A Fazer</span><span class="tile-ico">⧉</span></div>
+    <div class="tile-hd"><span class="tile-lbl">Pendentes</span><span class="tile-ico">⧉</span></div>
     <div class="stat">
-      <div class="stat-n stat-blue">{{ t.a_fazer }}</div>
-      <div class="stat-s">{{ t.em_progresso }} prog · {{ t.concluido }} ✓</div>
+      <div class="stat-n stat-blue">{{ tv.pending_count }}</div>
+      <div class="stat-s">{{ tv.overdue_count }} atrasada{{ 's' if tv.overdue_count != 1 else '' }} · {{ tv.in_progress_count }} prog</div>
     </div>
   </div>
 

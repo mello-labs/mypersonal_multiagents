@@ -3,9 +3,15 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PIP_ROOT_USER_ACTION=ignore
 
-# Instala dependências do sistema (necessário para google-auth e outras)
+# Instala dependências do sistema + Docker CLI
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    curl \
+    git \
+    && ARCH=$(uname -m) \
+    && curl -fsSL "https://download.docker.com/linux/static/stable/${ARCH}/docker-27.3.1.tgz" \
+       | tar -xz --strip-components=1 -C /usr/local/bin docker/docker \
+    && chmod +x /usr/local/bin/docker \
     && rm -rf /var/lib/apt/lists/*
 
 # Instala dependências Python
@@ -28,4 +34,4 @@ ENV WEB_HOST=0.0.0.0
 
 EXPOSE 8000
 
-CMD uvicorn web.app:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD ["sh", "-c", "uvicorn web.app:app --host 0.0.0.0 --port ${PORT:-8000}"]
