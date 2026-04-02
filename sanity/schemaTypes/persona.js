@@ -13,7 +13,7 @@ export default {
       name: 'persona_id',
       title: 'ID',
       type: 'slug',
-      options: { source: 'name' },
+      options: {source: 'name'},
       validation: Rule => Rule.required()
     },
     {
@@ -24,22 +24,29 @@ export default {
     {
       name: 'description',
       title: 'Descrição',
-      type: 'text',
-      rows: 3
+      type: 'text'
     },
     {
       name: 'tone',
       title: 'Tom',
       type: 'string',
       options: {
-        list: ['warm', 'professional', 'direct', 'casual', 'technical', 'strategic']
+        list: [
+          {title: 'Warm', value: 'warm'},
+          {title: 'Professional', value: 'professional'},
+          {title: 'Direct', value: 'direct'},
+          {title: 'Casual', value: 'casual'},
+          {title: 'Technical', value: 'technical'},
+          {title: 'Strategic', value: 'strategic'}
+        ],
+        layout: 'radio'
       }
     },
     {
       name: 'system_prompt',
       title: 'System Prompt base',
       type: 'text',
-      rows: 15,
+      rows: 20,
       validation: Rule => Rule.required()
     },
     {
@@ -62,6 +69,6 @@ export default {
     }
   ],
   preview: {
-    select: { title: 'name', subtitle: 'short_name' }
+    select: {title: 'name', subtitle: 'tone'}
   }
 }

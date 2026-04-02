@@ -1,6 +1,14 @@
 <div class="tsk{{ ' done' if t.status == 'Concluído' else '' }}" id="tr-{{ t.id }}">
-  <span class="tsk-pri {% if t.priority == 'Alta' %}pri-h{% elif t.priority == 'Média' %}pri-m{% else %}pri-l{% endif %}"></span>
-  <span class="tsk-name">{{ t.title }}</span>
+  <span class="tsk-pri {% if t.priority == 'Alta' %}pri-h{% elif t.priority == 'Média' or t.priority == 'Media' %}pri-m{% else %}pri-l{% endif %}"></span>
+  <div class="tsk-main">
+    <div class="tsk-head">
+      <span class="tsk-name">{{ t.title }}</span>
+      <span class="badge {{ t.display_status_class or 'badge-def' }}">{{ t.display_status or t.status }}</span>
+    </div>
+    {% if t.display_meta %}
+    <div class="tsk-meta">{{ t.display_meta }}</div>
+    {% endif %}
+  </div>
   {% if t.status != 'Concluído' %}
   <button class="tsk-btn"
           hx-post="/task/{{ t.id }}/complete"

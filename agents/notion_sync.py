@@ -361,6 +361,20 @@ def sync_tasks_to_local() -> int:
             count += 1
             _maybe_create_agenda_block(task_id, nt)
         else:
+            memory.update_task(
+                existing["id"],
+                title=nt["title"] or existing.get("title") or "Sem título",
+                priority=nt["priority"] or existing.get("priority") or "Média",
+                scheduled_time=nt.get("scheduled_time"),
+                actual_time=nt.get("actual_time"),
+                notion_page_id=nt.get("notion_page_id") or existing.get("notion_page_id"),
+            )
+            if nt.get("status"):
+                memory.update_task_status(
+                    existing["id"],
+                    nt["status"],
+                    nt.get("actual_time") or None,
+                )
             # Tarefa já existe — garante bloco de agenda se tiver horário
             _maybe_create_agenda_block(existing["id"], nt)
 

@@ -1,36 +1,46 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/docker-existing-dockerfile
 {
-	"name": "Existing Dockerfile",
-	"build": {
-		// Sets the run context to one level up instead of the .devcontainer folder.
-		"context": "..",
-		// Update the 'dockerFile' property if you aren't using the standard 'Dockerfile' filename.
-		"dockerfile": "../Dockerfile"
-	},
-	"features": {
-		"ghcr.io/devcontainer-config/features/dot-config:4": {}
-	},
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"s3anmorrow.openwithkraken"
-			]
-		}
-	}
+  "name": "Multiagentes · Dev",
 
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
+  "build": {
+    "context": "..",
+    "dockerfile": "../Dockerfile"
+  },
 
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "Web UI", "onAutoForward": "openBrowser" }
+  },
 
-	// Uncomment the next line to run commands after the container is created.
-	// "postCreateCommand": "cat /etc/os-release",
+  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt && mkdir -p logs reports",
 
-	// Configure tool-specific properties.
-	// "customizations": {},
+  "remoteEnv": {
+    "PYTHONPATH": "/workspaces/mypersonal_multiagents",
+    "PYTHONUNBUFFERED": "1",
+    "WEB_HOST": "0.0.0.0",
+    "WEB_PORT": "8000",
+    "PATH": "${containerEnv:PATH}"
+  },
 
-	// Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "devcontainer"
+  "remoteUser": "appuser",
+  "shutdownAction": "stopContainer",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.terminal.activateEnvironment": false,
+        "editor.formatOnSave": true
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        "eamodio.gitlens",
+        "donjayamanne.githistory",
+        "ms-azuretools.vscode-containers",
+        "usernamehw.errorlens",
+        "oderwat.indent-rainbow"
+      ]
+    }
+  }
 }

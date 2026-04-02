@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import fakeredis
 from fastapi.testclient import TestClient
 
@@ -151,3 +153,33 @@ def test_agenda_partial_htmx_retorna_blocos_do_intervalo(mem, monkeypatch):
     assert "Bloco A" in response.text
     assert "Bloco B" in response.text
     assert "Agenda Navegável" not in response.text
+
+
+def test_dashboard_marca_tarefa_atrasada_como_pendente(mem, monkeypatch):
+    monkeypatch.setattr(web_app.focus_guard, "start_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "stop_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "is_running", lambda: True)
+
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    web_app.memory._redis_client = fake
+
+    task_id = web_app.memory.create_task(
+        "Troia",
+        priority="Alta",
+        scheduled_time="11h",
+    )
+    web_app.memory.update_task_status(task_id, "Em progresso")
+    web_app.memory.create_agenda_block(
+        (web_app.date.today() - timedelta(days=1)).isoformat(),
+        "00:00-00:30",
+        "Troia",
+        task_id=task_id,
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Troia" in response.text
+    assert "Pendente" in response.text
+    assert "Bloco vencido" in response.text

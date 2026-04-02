@@ -305,6 +305,27 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      .blk-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .blk-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .blk-meta {
+        font-size: 11px;
+        color: var(--t2);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       .blk-done { text-decoration: line-through; color: var(--t3); }
       .blk-btn {
         background: none;
@@ -324,7 +345,7 @@
       /* ══ Task row ══ */
       .tsk {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 12px;
         padding: 11px 16px;
         border-bottom: 0.5px solid var(--sep);
@@ -335,10 +356,31 @@
       .pri-h { background: var(--red); box-shadow: 0 0 4px var(--red-dim); }
       .pri-m { background: var(--yell); }
       .pri-l { background: var(--s5); }
-      .tsk-name {
+      .tsk-main {
         flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .tsk-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .tsk-name {
         font-size: 14px;
         font-weight: 500;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tsk-meta {
+        font-size: 11px;
+        color: var(--t2);
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

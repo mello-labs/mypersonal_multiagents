@@ -104,7 +104,208 @@ def _persona_ctx(request: Request) -> dict:
     }
 
 
-def _summary_ctx(request: Request = None) -> dict:
+def _parse_slot_range(block_date: str | None, time_slot: str | None):
+    """Converte 'YYYY-MM-DD' + '09:00-10:00' em datetimes comparáveis."""
+    if not block_date or not time_slot or "-" not in time_slot:
+        return None
+    try:
+        start_str, end_str = [part.strip() for part in time_slot.split("-", 1)]
+        start_dt = datetime.strptime(
+            f"{block_date} {start_str}", "%Y-%m-%d %H:%M"
+        )
+        end_dt = datetime.strptime(
+            f"{block_date} {end_str}", "%Y-%m-%d %H:%M"
+        )
+        if end_dt <= start_dt:
+            return None
+        return start_dt, end_dt
+    except ValueError:
+        return None
+
+
+def _format_slot_label(block_date: str | None, time_slot: str | None, today: date) -> str:
+    if not time_slot:
+        return ""
+    if not block_date:
+        return time_slot
+    if block_date == today.isoformat():
+        return f"Hoje · {time_slot}"
+    try:
+        block_day = datetime.strptime(block_date, "%Y-%m-%d").date()
+        return f"{block_day.strftime('%d/%m')} · {time_slot}"
+    except ValueError:
+        return time_slot
+
+
+def _build_task_views(include_completed: bool = True) -> tuple[list[dict], dict]:
+    """Cria uma leitura temporal das tarefas para o frontend."""
+    now = datetime.now()
+    today = now.date()
+    priority_rank = {"Alta": 0, "Média": 1, "Media": 1, "Baixa": 2}
+    tasks = _safe(memory.list_all_tasks, [])
+    task_ids = [task["id"] for task in tasks]
+    blocks_by_task = _safe(
+        lambda: memory.get_agenda_blocks_for_tasks(task_ids),
+        {task_id: [] for task_id in task_ids},
+    )
+    task_views = []
+
+    for task in tasks:
+        view = dict(task)
+        blocks = blocks_by_task.get(task["id"], [])
+        open_blocks = [
+            block
+            for block in blocks
+            if not block.get("completed") and not block.get("rescheduled")
+        ]
+
+        overdue_blocks = []
+        for block in open_blocks:
+            slot_range = _parse_slot_range(
+                block.get("block_date"), block.get("time_slot")
+            )
+            if slot_range:
+                _, end_dt = slot_range
+                if end_dt < now:
+                    overdue_blocks.append(block)
+                continue
+            if (block.get("block_date") or "") < today.isoformat():
+                overdue_blocks.append(block)
+
+        open_blocks.sort(
+            key=lambda block: (
+                block.get("block_date") or "9999-99-99",
+                block.get("time_slot") or "99:99-99:99",
+            )
+        )
+        overdue_blocks.sort(
+            key=lambda block: (
+                block.get("block_date") or "9999-99-99",
+                block.get("time_slot") or "99:99-99:99",
+            )
+        )
+
+        next_block = open_blocks[0] if open_blocks else None
+        overdue_block = overdue_blocks[0] if overdue_blocks else None
+        original_status = task.get("status") or "A fazer"
+
+        if original_status == "Concluído":
+            display_status = "Concluído"
+            status_class = "badge-ok"
+            meta = (
+                f"Concluída às {task.get('actual_time')}"
+                if task.get("actual_time")
+                else "Concluída"
+            )
+        elif overdue_block:
+            display_status = "Pendente"
+            status_class = "badge-warn"
+            meta = f"Bloco vencido · {_format_slot_label(overdue_block.get('block_date'), overdue_block.get('time_slot'), today)}"
+        elif original_status == "Em progresso":
+            display_status = "Em progresso"
+            status_class = "badge-def"
+            meta = (
+                _format_slot_label(
+                    next_block.get("block_date"),
+                    next_block.get("time_slot"),
+                    today,
+                )
+                if next_block
+                else (task.get("scheduled_time") or "Sem bloco associado")
+            )
+        else:
+            display_status = "A fazer"
+            status_class = "badge-def"
+            meta = (
+                _format_slot_label(
+                    next_block.get("block_date"),
+                    next_block.get("time_slot"),
+                    today,
+                )
+                if next_block
+                else (task.get("scheduled_time") or "Sem horário definido")
+            )
+
+        view.update(
+            {
+                "display_status": display_status,
+                "display_status_class": status_class,
+                "display_meta": meta,
+                "is_overdue": bool(overdue_block),
+            }
+        )
+        task_views.append(view)
+
+    if not include_completed:
+        task_views = [task for task in task_views if task["display_status"] != "Concluído"]
+
+    status_rank = {"Pendente": 0, "Em progresso": 1, "A fazer": 2, "Concluído": 3}
+    task_views.sort(
+        key=lambda task: (
+            status_rank.get(task.get("display_status", "A fazer"), 4),
+            priority_rank.get(task.get("priority", "Média"), 1),
+            task.get("scheduled_time") or "99:99",
+            -(task.get("id") or 0),
+        )
+    )
+
+    overview = {
+        "pending_count": sum(
+            1 for task in task_views if task["display_status"] in {"Pendente", "A fazer"}
+        ),
+        "overdue_count": sum(1 for task in task_views if task["display_status"] == "Pendente"),
+        "in_progress_count": sum(
+            1 for task in task_views if task["display_status"] == "Em progresso"
+        ),
+        "done_count": sum(1 for task in task_views if task["display_status"] == "Concluído"),
+    }
+    return task_views, overview
+
+
+def _build_agenda_blocks(include_rescheduled: bool = False) -> list[dict]:
+    now = datetime.now()
+    today = now.date()
+    blocks = _safe(
+        lambda: memory.get_today_agenda(include_rescheduled=include_rescheduled),
+        [],
+    )
+    block_views = []
+    for block in blocks:
+        view = dict(block)
+        slot_range = _parse_slot_range(view.get("block_date"), view.get("time_slot"))
+        is_overdue = False
+        if not view.get("completed") and not view.get("rescheduled"):
+            if slot_range:
+                _, end_dt = slot_range
+                is_overdue = end_dt < now
+            elif (view.get("block_date") or "") < today.isoformat():
+                is_overdue = True
+
+        if view.get("completed"):
+            state_label = "Concluído"
+            state_class = "badge-ok"
+        elif view.get("rescheduled"):
+            state_label = "Reagendado"
+            state_class = "badge-warn"
+        elif is_overdue:
+            state_label = "Pendente"
+            state_class = "badge-warn"
+        else:
+            state_label = "Aberto"
+            state_class = "badge-def"
+
+        view.update(
+            {
+                "display_state_label": state_label,
+                "display_state_class": state_class,
+                "is_overdue": is_overdue,
+            }
+        )
+        block_views.append(view)
+    return block_views
+
+
+def _summary_ctx(request: Request = None, include_completed: bool = False) -> dict:
     """Contexto de resumo do sistema — nunca lança exceção."""
     summary = _safe(
         orchestrator.get_system_summary,
@@ -116,7 +317,8 @@ def _summary_ctx(request: Request = None) -> dict:
             "redis_ok": False,
         },
     )
-    ctx = {"summary": summary}
+    _, task_overview = _build_task_views(include_completed=include_completed)
+    ctx = {"summary": summary, "task_overview": task_overview}
     if request:
         ctx.update(_persona_ctx(request))
     return ctx
@@ -226,9 +428,12 @@ async def health():
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     ctx = _summary_ctx(request)
-    ctx["agenda"] = _safe(memory.get_today_agenda, [])
+    tasks, task_overview = _build_task_views(include_completed=False)
+    agenda_blocks = _build_agenda_blocks()
+    ctx["agenda"] = agenda_blocks
     ctx["blocks"] = ctx["agenda"]  # alias for partials/agenda.html
-    ctx["tasks"] = _safe(memory.list_all_tasks, [])
+    ctx["tasks"] = tasks
+    ctx["task_overview"] = task_overview
     ctx["redis_warn"] = "" if ctx["summary"].get("redis_ok") else _REDIS_WARN
     ctx["page_name"] = "dashboard"
     return templates.TemplateResponse(request, "index.html", ctx)
@@ -260,7 +465,7 @@ async def agenda(
                 [],
             )
         else:
-            blocks = _safe(memory.get_today_agenda, [])
+            blocks = _build_agenda_blocks()
         return templates.TemplateResponse(
             request,
             "partials/agenda.html",
@@ -332,7 +537,11 @@ async def chat(request: Request, message: str = Form(...)):
 
 @app.get("/status", response_class=HTMLResponse)
 async def status(request: Request):
-    return templates.TemplateResponse(request, "partials/status.html", _summary_ctx())
+    return templates.TemplateResponse(
+        request,
+        "partials/status.html",
+        _summary_ctx(request, include_completed=False),
+    )
 
 
 @app.post("/agenda/import", response_class=HTMLResponse)
@@ -368,18 +577,19 @@ async def import_agenda_history(
 
 
 @app.get("/tasks", response_class=HTMLResponse)
-async def tasks(request: Request):
+async def tasks(request: Request, include_completed: bool = Query(default=False)):
+    tasks_view, _ = _build_task_views(include_completed=include_completed)
     return templates.TemplateResponse(
         request,
         "partials/tasks.html",
-        {"tasks": _safe(memory.list_all_tasks, [])},
+        {"tasks": tasks_view},
     )
 
 
 @app.get("/tasks-page", response_class=HTMLResponse)
 async def tasks_page(request: Request):
     ctx = _summary_ctx(request)
-    ctx["tasks"] = _safe(memory.list_all_tasks, [])
+    ctx["tasks"], ctx["task_overview"] = _build_task_views()
     ctx["page_name"] = "tasks"
     return templates.TemplateResponse(request, "tasks_page.html", ctx)
 
@@ -409,7 +619,7 @@ async def create_task(
     return templates.TemplateResponse(
         request,
         "partials/tasks.html",
-        {"tasks": _safe(memory.list_all_tasks, [])},
+        {"tasks": _build_task_views(include_completed=False)[0]},
     )
 
 
@@ -418,14 +628,18 @@ async def complete_task(request: Request, task_id: int):
     _safe(lambda: memory.update_task_status(task_id, "Concluído"), None)
     task = _safe(lambda: memory.get_task(task_id), None)
     if task:
+        task_view = next(
+            (item for item in _build_task_views()[0] if item["id"] == task_id),
+            task,
+        )
         # Swap cirúrgico: retorna só a linha atualizada (preserva scroll)
         return templates.TemplateResponse(
-            request, "partials/task_row.html", {"t": task}
+            request, "partials/task_row.html", {"t": task_view}
         )
     return templates.TemplateResponse(
         request,
         "partials/tasks.html",
-        {"tasks": _safe(memory.list_all_tasks, [])},
+        {"tasks": _build_task_views(include_completed=False)[0]},
     )
 
 
@@ -445,13 +659,21 @@ async def complete_block(request: Request, block_id: int):
     _safe(lambda: memory.mark_block_completed(block_id, True), None)
     block = _safe(lambda: memory.get_block(block_id), None)
     if block:
+        block_view = next(
+            (
+                item
+                for item in _build_agenda_blocks(include_rescheduled=True)
+                if item["id"] == block_id
+            ),
+            block,
+        )
         return templates.TemplateResponse(
-            request, "partials/block_row.html", {"b": block}
+            request, "partials/block_row.html", {"b": block_view}
         )
     return templates.TemplateResponse(
         request,
         "partials/agenda.html",
-        {"blocks": _safe(memory.get_today_agenda, [])},
+        {"blocks": _build_agenda_blocks()},
     )
 
 
