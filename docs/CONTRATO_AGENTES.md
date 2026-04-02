@@ -44,7 +44,7 @@ O objetivo é fixar função, entrada, saída, memória, autoridade, limites e f
 
 ### `orchestrator`
 
-Arquivo: [agents/orchestrator.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/agents/orchestrator.py)
+Arquivo: `agents/orchestrator.py`
 
 Função:
 - interpretar intenção do usuário
@@ -86,7 +86,7 @@ Risco atual:
 
 ### `focus_guard`
 
-Arquivo: [agents/focus_guard.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/agents/focus_guard.py)
+Arquivo: `agents/focus_guard.py`
 
 Função:
 - monitorar foco, desvio e sessões
@@ -129,7 +129,7 @@ Risco atual:
 
 ### `scheduler`
 
-Arquivo: [agents/scheduler.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/agents/scheduler.py)
+Arquivo: `agents/scheduler.py`
 
 Função:
 - gerir agenda
@@ -172,7 +172,7 @@ Risco atual:
 
 ### `validator`
 
-Arquivo: [agents/validator.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/agents/validator.py)
+Arquivo: `agents/validator.py`
 
 Função:
 - confirmar se uma tarefa foi realmente concluída
@@ -213,7 +213,7 @@ Risco atual:
 
 ### `retrospective`
 
-Arquivo: [agents/retrospective.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/agents/retrospective.py)
+Arquivo: `agents/retrospective.py`
 
 Função:
 - ler a semana
@@ -253,7 +253,7 @@ Risco atual:
 
 ### `notion_sync`
 
-Arquivo: [agents/notion_sync.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/agents/notion_sync.py)
+Arquivo: `agents/notion_sync.py`
 
 Função:
 - sincronizar tarefas e agenda com Notion
@@ -292,7 +292,7 @@ Risco atual:
 
 ### `calendar_sync`
 
-Arquivo: [agents/calendar_sync.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/agents/calendar_sync.py)
+Arquivo: `agents/calendar_sync.py`
 
 Função:
 - integrar Google Calendar à agenda operacional
@@ -327,7 +327,7 @@ Risco atual:
 
 ### `life_guard`
 
-Arquivo: [agents/life_guard.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/agents/life_guard.py)
+Arquivo: `agents/life_guard.py`
 
 Função:
 - lembrar rotinas vitais
@@ -366,7 +366,7 @@ Risco atual:
 
 ### `persona_manager`
 
-Arquivo: [agents/persona_manager.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/agents/persona_manager.py)
+Arquivo: `agents/persona_manager.py`
 
 Função:
 - selecionar a persona ativa
@@ -393,7 +393,7 @@ Governança desejada no Sanity:
 - versionamento leve
 
 Estado atual:
-- a verdade operacional ainda está em [personas/](/Users/nettomello/CODIGOS/mypersonal_multiagents/personas)
+- a verdade operacional ainda está em `personas/`
 - o schema `persona` do Sanity existe, mas ainda não substituiu o JSON local
 
 Risco atual:
@@ -439,7 +439,7 @@ Fluxo correto:
 
 Modelo local configurado:
 - `docker.io/ai/gemma3:4B-F16`
-- fallback em [core/openai_utils.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/core/openai_utils.py)
+- fallback em `core/openai_utils.py`
 
 Papel recomendado:
 - contingência quando OpenAI falhar

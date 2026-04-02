@@ -1,5 +1,5 @@
 <div class="tsk{{ ' done' if t.status == 'Concluído' else '' }}" id="tr-{{ t.id }}">
-  <span class="tsk-pri {% if t.priority == 'Alta' %}pri-h{% elif t.priority == 'Média' %}pri-m{% else %}pri-l{% endif %}"></span>
+  <span class="tsk-pri {% if t.priority == 'Alta' %}pri-h{% elif t.priority == 'Média' or t.priority == 'Media' %}pri-m{% else %}pri-l{% endif %}"></span>
   <div class="tsk-main">
     <div class="tsk-head">
       <span class="tsk-name">{{ t.title }}</span>

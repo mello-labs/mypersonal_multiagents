@@ -3,15 +3,12 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PIP_ROOT_USER_ACTION=ignore
 
-# Instala dependências do sistema + Docker CLI
+# Instala dependências do sistema + Docker CLI via repositório da distro
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
     git \
-    && ARCH=$(uname -m) \
-    && curl -fsSL "https://download.docker.com/linux/static/stable/${ARCH}/docker-27.3.1.tgz" \
-       | tar -xz --strip-components=1 -C /usr/local/bin docker/docker \
-    && chmod +x /usr/local/bin/docker \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Instala dependências Python

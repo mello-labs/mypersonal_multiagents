@@ -116,6 +116,8 @@ def _parse_slot_range(block_date: str | None, time_slot: str | None):
         end_dt = datetime.strptime(
             f"{block_date} {end_str}", "%Y-%m-%d %H:%M"
         )
+        if end_dt <= start_dt:
+            return None
         return start_dt, end_dt
     except ValueError:
         return None
@@ -140,11 +142,17 @@ def _build_task_views(include_completed: bool = True) -> tuple[list[dict], dict]
     now = datetime.now()
     today = now.date()
     priority_rank = {"Alta": 0, "Média": 1, "Media": 1, "Baixa": 2}
+    tasks = _safe(memory.list_all_tasks, [])
+    task_ids = [task["id"] for task in tasks]
+    blocks_by_task = _safe(
+        lambda: memory.get_agenda_blocks_for_tasks(task_ids),
+        {task_id: [] for task_id in task_ids},
+    )
     task_views = []
 
-    for task in _safe(memory.list_all_tasks, []):
+    for task in tasks:
         view = dict(task)
-        blocks = _safe(lambda task_id=task["id"]: memory.get_agenda_blocks_for_task(task_id), [])
+        blocks = blocks_by_task.get(task["id"], [])
         open_blocks = [
             block
             for block in blocks
@@ -297,7 +305,7 @@ def _build_agenda_blocks(include_rescheduled: bool = False) -> list[dict]:
     return block_views
 
 
-def _summary_ctx(request: Request = None) -> dict:
+def _summary_ctx(request: Request = None, include_completed: bool = False) -> dict:
     """Contexto de resumo do sistema — nunca lança exceção."""
     summary = _safe(
         orchestrator.get_system_summary,
@@ -309,7 +317,7 @@ def _summary_ctx(request: Request = None) -> dict:
             "redis_ok": False,
         },
     )
-    _, task_overview = _build_task_views()
+    _, task_overview = _build_task_views(include_completed=include_completed)
     ctx = {"summary": summary, "task_overview": task_overview}
     if request:
         ctx.update(_persona_ctx(request))
@@ -529,7 +537,11 @@ async def chat(request: Request, message: str = Form(...)):
 
 @app.get("/status", response_class=HTMLResponse)
 async def status(request: Request):
-    return templates.TemplateResponse(request, "partials/status.html", _summary_ctx())
+    return templates.TemplateResponse(
+        request,
+        "partials/status.html",
+        _summary_ctx(request, include_completed=False),
+    )
 
 
 @app.post("/agenda/import", response_class=HTMLResponse)
@@ -565,8 +577,8 @@ async def import_agenda_history(
 
 
 @app.get("/tasks", response_class=HTMLResponse)
-async def tasks(request: Request):
-    tasks_view, _ = _build_task_views()
+async def tasks(request: Request, include_completed: bool = Query(default=False)):
+    tasks_view, _ = _build_task_views(include_completed=include_completed)
     return templates.TemplateResponse(
         request,
         "partials/tasks.html",
@@ -607,7 +619,7 @@ async def create_task(
     return templates.TemplateResponse(
         request,
         "partials/tasks.html",
-        {"tasks": _build_task_views()[0]},
+        {"tasks": _build_task_views(include_completed=False)[0]},
     )
 
 
@@ -627,7 +639,7 @@ async def complete_task(request: Request, task_id: int):
     return templates.TemplateResponse(
         request,
         "partials/tasks.html",
-        {"tasks": _build_task_views()[0]},
+        {"tasks": _build_task_views(include_completed=False)[0]},
     )
 
 

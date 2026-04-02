@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import fakeredis
 from fastapi.testclient import TestClient
 
@@ -168,7 +170,7 @@ def test_dashboard_marca_tarefa_atrasada_como_pendente(mem, monkeypatch):
     )
     web_app.memory.update_task_status(task_id, "Em progresso")
     web_app.memory.create_agenda_block(
-        web_app.date.today().isoformat(),
+        (web_app.date.today() - timedelta(days=1)).isoformat(),
         "00:00-00:30",
         "Troia",
         task_id=task_id,

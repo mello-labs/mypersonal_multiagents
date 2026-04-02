@@ -4,60 +4,28 @@
 {% set al = summary.alerts %}
 {% set tv = task_overview %}
 
-<div id="stats-row" style="display:contents">
-
-  <div class="tile gc-1 gr-1">
-    <div class="tile-hd"><span class="tile-lbl">Pendentes</span><span class="tile-ico">⧉</span></div>
-    <div class="stat">
-      <div class="stat-n stat-blue">{{ tv.pending_count }}</div>
-      <div class="stat-s">{{ tv.overdue_count }} atrasada{{ 's' if tv.overdue_count != 1 else '' }} · {{ tv.in_progress_count }} prog</div>
-    </div>
+<div id="stats-row" class="metrics" hx-get="/status" hx-trigger="every 20s" hx-swap="outerHTML">
+  <div class="metric m-blue">
+    <div class="metric-lbl">Pendentes</div>
+    <div class="metric-val v-blue">{{ tv.pending_count }}</div>
+    <div class="metric-sub">{{ tv.overdue_count }} atrasada{{ 's' if tv.overdue_count != 1 else '' }} &middot; {{ tv.in_progress_count }} em prog</div>
   </div>
 
-  <div class="tile gc-2 gr-1">
-    <div class="tile-hd"><span class="tile-lbl">Agenda</span><span class="tile-ico">◬</span></div>
-    <div class="stat">
-      <div class="stat-n stat-green">{{ a.completed }}<span class="stat-total">/{{ a.total_blocks }}</span></div>
-      <div class="stat-s">blocos hoje</div>
-    </div>
+  <div class="metric m-green">
+    <div class="metric-lbl">Agenda</div>
+    <div class="metric-val v-green">{{ a.completed }}<span class="v-frac">/{{ a.total_blocks }}</span></div>
+    <div class="metric-sub">blocos hoje</div>
   </div>
 
-  <div class="tile gc-3 gr-1">
-    <div class="tile-hd"><span class="tile-lbl">Foco</span><span class="tile-ico">⍟</span></div>
-    <div class="stat">
-      <div class="stat-n stat-label">
-        {% if f.guard_running %}<span class="c-green">● Ativo</span>{% else %}<span class="c-red">● Off</span>{% endif %}
-      </div>
-      <div class="stat-s">{% if f.on_track %}on track{% else %}⚠ desvio{% endif %}</div>
-    </div>
+  <div class="metric {% if f.guard_running %}m-green{% else %}m-red{% endif %}">
+    <div class="metric-lbl">Foco</div>
+    <div class="metric-val v-text {% if f.guard_running %}v-green{% else %}v-red{% endif %}">{% if f.guard_running %}Ativo{% else %}Off{% endif %}</div>
+    <div class="metric-sub">{% if f.on_track %}on track{% else %}desvio detectado{% endif %}</div>
   </div>
 
-  <div class="tile gc-4 gr-1">
-    <div class="tile-hd"><span class="tile-lbl">Alertas</span><span class="tile-ico">⧖</span></div>
-    <div class="stat">
-      <div class="stat-n {% if al.pending > 0 %}stat-red{% else %}stat-dim{% endif %}">{{ al.pending }}</div>
-      <div class="stat-s">pendente{{ 's' if al.pending != 1 else '' }}</div>
-    </div>
+  <div class="metric {% if al.pending > 0 %}m-red{% else %}m-dim{% endif %}">
+    <div class="metric-lbl">Alertas</div>
+    <div class="metric-val {% if al.pending > 0 %}v-red{% else %}v-dim{% endif %}">{{ al.pending }}</div>
+    <div class="metric-sub">pendente{{ 's' if al.pending != 1 else '' }}</div>
   </div>
-
 </div>
-
-{# Toast fora do display:contents para evitar problemas de alinhamento #}
-{% if sync_msg is defined %}
-<div id="sync-toast-msg"
-     class="sync-toast gc-1-5 gr-1"
-     style="grid-column:1/-1;grid-row:1;align-self:end;pointer-events:none;z-index:5">
-  ✓ {{ sync_msg }}
-</div>
-<script>
-  (function() {
-    var el = document.getElementById('sync-toast-msg');
-    if (!el) return;
-    setTimeout(function() {
-      el.style.transition = 'opacity .5s';
-      el.style.opacity = '0';
-      setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 500);
-    }, 3000);
-  })();
-</script>
-{% endif %}

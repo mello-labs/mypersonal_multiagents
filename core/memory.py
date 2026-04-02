@@ -220,6 +220,11 @@ def update_task(task_id: int, **fields: Any) -> None:
     r = _r()
     mapping = {}
     notion_page_id = None
+    old_notion_page_id = None
+    task_key = f"task:{task_id}"
+
+    if "notion_page_id" in fields:
+        old_notion_page_id = r.hget(task_key, "notion_page_id")
 
     for key, value in fields.items():
         if key == "id":
@@ -235,9 +240,14 @@ def update_task(task_id: int, **fields: Any) -> None:
         return
 
     mapping["updated_at"] = _now()
-    r.hset(f"task:{task_id}", mapping=mapping)
+    r.hset(task_key, mapping=mapping)
+    if "notion_page_id" in fields and old_notion_page_id:
+        if old_notion_page_id != mapping.get("notion_page_id", ""):
+            r.delete(f"tasks:notion:{old_notion_page_id}")
     if notion_page_id:
         r.set(f"tasks:notion:{notion_page_id}", task_id)
+    elif "notion_page_id" in fields and old_notion_page_id:
+        r.delete(f"tasks:notion:{old_notion_page_id}")
 
 
 def get_task(task_id: int) -> Optional[dict]:
@@ -545,6 +555,56 @@ def get_agenda_blocks_for_task(task_id: int) -> list[dict]:
                 )
             )
     return blocks
+
+
+def get_agenda_blocks_for_tasks(task_ids: list[int]) -> dict[int, list[dict]]:
+    """Retorna blocos por tarefa em lote para reduzir round-trips ao Redis."""
+    if not task_ids:
+        return {}
+
+    r = _r()
+    pipe = r.pipeline()
+    for task_id in task_ids:
+        pipe.zrange(f"blocks:task:{task_id}", 0, -1)
+    block_id_lists = pipe.execute()
+
+    seen = set()
+    unique_block_ids = []
+    for block_ids in block_id_lists:
+        for bid in block_ids:
+            if bid not in seen:
+                seen.add(bid)
+                unique_block_ids.append(bid)
+
+    block_data_map = {}
+    if unique_block_ids:
+        pipe = r.pipeline()
+        for bid in unique_block_ids:
+            pipe.hgetall(f"block:{bid}")
+        raw_blocks = pipe.execute()
+        for bid, data in zip(unique_block_ids, raw_blocks):
+            if not data:
+                continue
+            data["id"] = int(bid)
+            block_data_map[bid] = _to_dict(
+                data,
+                int_fields=[
+                    "id",
+                    "task_id",
+                    "completed",
+                    "rescheduled",
+                    "rescheduled_to_block_id",
+                    "source_block_id",
+                    "reschedule_count",
+                ],
+            )
+
+    blocks_by_task: dict[int, list[dict]] = {}
+    for task_id, block_ids in zip(task_ids, block_id_lists):
+        blocks_by_task[task_id] = [
+            block_data_map[bid] for bid in block_ids if bid in block_data_map
+        ]
+    return blocks_by_task
 
 
 # =============================================================================

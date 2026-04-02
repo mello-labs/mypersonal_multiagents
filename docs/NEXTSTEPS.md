@@ -34,36 +34,36 @@ Se não houve commit ainda, escrever:
 
 ### Pode entrar no commit seguro
 
-- [config.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/config.py)
-- [Dockerfile](/Users/nettomello/CODIGOS/mypersonal_multiagents/Dockerfile)
-- [.devcontainer/devcontainer.json](/Users/nettomello/CODIGOS/mypersonal_multiagents/.devcontainer/devcontainer.json)
-- [agents/notion_sync.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/agents/notion_sync.py)
-- [core/memory.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/core/memory.py)
-- [core/notifier.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/core/notifier.py)
-- [sanity/schemaTypes/persona.js](/Users/nettomello/CODIGOS/mypersonal_multiagents/sanity/schemaTypes/persona.js)
-- [tests/test_calendar_sync.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/tests/test_calendar_sync.py)
-- [tests/test_memory.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/tests/test_memory.py)
-- [tests/test_notifier_openai_utils.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/tests/test_notifier_openai_utils.py)
-- [tests/test_notion_sync.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/tests/test_notion_sync.py)
-- [tests/test_persona_manager.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/tests/test_persona_manager.py)
-- [tests/test_retrospective.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/tests/test_retrospective.py)
-- [tests/test_scheduler.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/tests/test_scheduler.py)
-- [tests/test_validator.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/tests/test_validator.py)
-- [tests/test_web_chat.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/tests/test_web_chat.py)
-- [web/app.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/web/app.py)
-- [web/templates/base.html](/Users/nettomello/CODIGOS/mypersonal_multiagents/web/templates/base.html)
-- [web/templates/index.html](/Users/nettomello/CODIGOS/mypersonal_multiagents/web/templates/index.html)
-- [web/templates/partials/block_row.html](/Users/nettomello/CODIGOS/mypersonal_multiagents/web/templates/partials/block_row.html)
-- [web/templates/partials/status.html](/Users/nettomello/CODIGOS/mypersonal_multiagents/web/templates/partials/status.html)
-- [web/templates/partials/task_row.html](/Users/nettomello/CODIGOS/mypersonal_multiagents/web/templates/partials/task_row.html)
-- [web/templates/tasks_page.html](/Users/nettomello/CODIGOS/mypersonal_multiagents/web/templates/tasks_page.html)
-- [docs/CONTRATO_AGENTES.md](/Users/nettomello/CODIGOS/mypersonal_multiagents/docs/CONTRATO_AGENTES.md)
-- [docs/NEXTSTEPS.md](/Users/nettomello/CODIGOS/mypersonal_multiagents/docs/NEXTSTEPS.md)
+- `config.py`
+- `Dockerfile`
+- `.devcontainer/devcontainer.json`
+- `agents/notion_sync.py`
+- `core/memory.py`
+- `core/notifier.py`
+- `sanity/schemaTypes/persona.js`
+- `tests/test_calendar_sync.py`
+- `tests/test_memory.py`
+- `tests/test_notifier_openai_utils.py`
+- `tests/test_notion_sync.py`
+- `tests/test_persona_manager.py`
+- `tests/test_retrospective.py`
+- `tests/test_scheduler.py`
+- `tests/test_validator.py`
+- `tests/test_web_chat.py`
+- `web/app.py`
+- `web/templates/base.html`
+- `web/templates/index.html`
+- `web/templates/partials/block_row.html`
+- `web/templates/partials/status.html`
+- `web/templates/partials/task_row.html`
+- `web/templates/tasks_page.html`
+- `docs/CONTRATO_AGENTES.md`
+- `docs/NEXTSTEPS.md`
 
 ### Não deve entrar no commit seguro
 
-- [.claude/settings.local.json](/Users/nettomello/CODIGOS/mypersonal_multiagents/.claude/settings.local.json)
-- [dump.rdb](/Users/nettomello/CODIGOS/mypersonal_multiagents/dump.rdb)
+- `.claude/settings.local.json`
+- `dump.rdb`
 
 Motivo:
 - arquivo local de ferramenta
@@ -118,8 +118,8 @@ Conclusão:
 
 Modelo local detectado:
 - `docker.io/ai/gemma3:4B-F16`
-- configurado em [config.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/config.py)
-- fallback implementado em [core/openai_utils.py](/Users/nettomello/CODIGOS/mypersonal_multiagents/core/openai_utils.py)
+- configurado em `config.py`
+- fallback implementado em `core/openai_utils.py`
 
 Diretriz:
 
