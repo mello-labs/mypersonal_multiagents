@@ -59,6 +59,7 @@ Se não houve commit ainda, escrever:
 - `web/templates/tasks_page.html`
 - `docs/CONTRATO_AGENTES.md`
 - `docs/NEXTSTEPS.md`
+- `docs/SPRINT_VIDA.md`
 
 ### Não deve entrar no commit seguro
 
@@ -164,6 +165,11 @@ Usos não recomendados:
 - [ ] Confirmar Railway estável após push
   - Status: TODO
   - Log:
+  - Commit: pendente
+
+- [ ] Fechar contrato operacional de notificações
+  - Status: IN_PROGRESS
+  - Log: diagnóstico fechado. `focus_guard` gera alerta no Railway, mas `mac_push` não funciona fora de macOS e Alexa depende de `VOICE_MONKEY_*` ou `IFTTT_*`. Observabilidade do `notifier` foi reforçada e `SPRINT_VIDA.md` reescrito para distinguir local versus Railway.
   - Commit: pendente
 
 ### Fase 1. Governança dos agentes

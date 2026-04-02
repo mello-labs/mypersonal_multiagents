@@ -1,5 +1,6 @@
 import re
 from types import SimpleNamespace
+import subprocess
 
 
 def _strip_ansi(text: str) -> str:
@@ -72,3 +73,47 @@ def test_chat_completions_fallback(monkeypatch):
     assert completions.calls[1]["model"] == "fallback"
     assert len(warnings) == 1
     assert errors == []
+
+
+def test_mac_push_warns_outside_macos(monkeypatch):
+    from core import notifier
+
+    warnings: list[str] = []
+    monkeypatch.setattr(notifier.sys, "platform", "linux")
+    monkeypatch.setattr(notifier, "warning", lambda msg, *_: warnings.append(msg))
+
+    notifier.mac_push("Teste", "Mensagem")
+
+    assert warnings == ["mac_push ignorado: notificações nativas só funcionam em macOS."]
+
+
+def test_mac_push_warns_when_osascript_fails(monkeypatch):
+    from core import notifier
+
+    warnings: list[str] = []
+    monkeypatch.setattr(notifier.sys, "platform", "darwin")
+    monkeypatch.setattr(notifier, "warning", lambda msg, *_: warnings.append(msg))
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args[0], 1, stderr=b"boom")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    notifier.mac_push("Teste", "Mensagem")
+
+    assert warnings == ["mac_push falhou via osascript (code=1): boom"]
+
+
+def test_alexa_announce_warns_without_provider(monkeypatch):
+    from core import notifier
+
+    warnings: list[str] = []
+    monkeypatch.delenv("VOICE_MONKEY_TOKEN", raising=False)
+    monkeypatch.delenv("IFTTT_WEBHOOK_KEY", raising=False)
+    monkeypatch.setattr(notifier, "warning", lambda msg, *_: warnings.append(msg))
+
+    notifier.alexa_announce("Mensagem")
+
+    assert warnings == [
+        "Alexa indisponível: configure VOICE_MONKEY_TOKEN ou IFTTT_WEBHOOK_KEY no ambiente."
+    ]

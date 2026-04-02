@@ -1,411 +1,291 @@
-# SPRINT VIDA — Interrupção Cognitiva e Rotinas Pessoais
+# SPRINT VIDA
+# Interrupção Cognitiva e Rotinas Pessoais
 
-**Status:** Implementado (30/03/2026)
-**Prioridade:** P0 — resolve o problema central: hiperfoco sem consciência de tempo
-**Implementação:** completa — todos os entregáveis codificados e integrados
+**Status:** implementado parcialmente e em operação  
+**Data-base:** 30/03/2026  
+**Última revisão:** 02/04/2026  
+**Prioridade:** P0  
 
----
+## O problema real
 
-## O problema que este sprint resolve
+Autismo + hiperfoco distorcem percepção de tempo.
+O terminal registra. Mas não interrompe.
 
-Autismo + hiperfoco = 8 horas viram 15 minutos. O terminal não interrompe.
-Precisamos de canais que forcem interrupção física: tela + som ambiente.
+O objetivo deste sprint nunca foi "mostrar alertas bonitos".
+O objetivo foi criar canais externos ao fluxo cognitivo:
 
----
+- tela
+- voz
+- rotina automática
 
-## Entregáveis
+Sem isso, o sistema pensa. Mas não corta a inércia.
+
+## O que continua válido
+
+Estes pilares continuam corretos:
+
+- `core/notifier.py` como camada única de notificação
+- `agents/focus_guard.py` como guardião de desvio e escalada
+- `agents/life_guard.py` como camada de rotinas pessoais
+- escalada por tempo de sessão
+- Alexa como canal de voz
+- hidratação, refeições e finanças como rotinas observáveis
+
+## O que mudou desde o texto original
+
+O sprint original tratava algumas premissas como universais.
+Hoje sabemos que não são.
+
+### 1. `mac_push` não é canal de produção
+
+`mac_push()` depende de `osascript`.
+Isso só existe em macOS local.
+
+Conclusão:
+
+- local macOS: suportado
+- Railway Linux: não suportado
+
+Se o `focus_guard` rodar no Railway, ele pode até tentar chamar
+`mac_push()`, mas isso jamais gera pop-up no Mac.
+
+### 2. Alexa já não é só IFTTT
+
+Hoje o desenho correto é:
+
+- primário: `VOICE_MONKEY_*`
+- fallback: `IFTTT_*`
+
+IFTTT continua útil. Mas já não é o único caminho.
+
+### 3. Falha silenciosa deixou de ser aceitável
+
+O protótipo usava `pass` em caso de erro.
+Isso servia para não derrubar o agente.
+
+Agora isso virou ruído perigoso.
+
+O sistema precisa distinguir:
+
+- "mensagem foi gerada"
+- "tentativa de notificar aconteceu"
+- "notificação foi realmente entregue"
+
+## Estado atual dos entregáveis
 
 ```text
-| # | O que | Arquivo | Depende de |
-|---|---|---|---|  
-| 1 | Mac push via osascript | `core/notifier.py` | nada |
-| 2 | Escalada por tempo no Focus Guard | `agents/focus_guard.py` | entregável 1 |
-| 3 | Alexa via IFTTT webhook | `core/notifier.py` | conta IFTTT |
-| 4 | Life Guard agent (rotinas pessoais) | `agents/life_guard.py` | entregável 1 |
-| 5 | Integração Life Guard no main.py | `main.py` | entregável 4 |
-````
-
----
-
-## Entregável 1 — Mac push via osascript
-
-**Adicionar em `core/notifier.py`:**
-
-```python
-import subprocess
-
-def mac_push(title: str, message: str, sound: bool = False) -> None:
-    """Envia notificação nativa macOS via AppleScript."""
-    sound_line = ' sound name "Sosumi"' if sound else ""
-    script = f'display notification "{message}" with title "{title}"{sound_line}'
-    try:
-        subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            timeout=5
-        )
-    except Exception:
-        pass  # nunca quebra o agente por falha de notificação
-
-
-def alexa_announce(message: str) -> None:
-    """Dispara anúncio na Alexa via IFTTT webhook."""
-    import requests
-    key = os.getenv("IFTTT_WEBHOOK_KEY", "")
-    event = os.getenv("IFTTT_ALEXA_EVENT", "neo_alert")
-    if not key:
-        return
-    try:
-        requests.post(
-            f"https://maker.ifttt.com/trigger/{event}/with/key/{key}",
-            json={"value1": message},
-            timeout=5
-        )
-    except Exception:
-        pass
++---+-----------------------------+---------------------------+------------+
+| # | Entregável                  | Arquivo                   | Estado     |
++---+-----------------------------+---------------------------+------------+
+| 1 | Mac push via osascript      | core/notifier.py          | parcial    |
+| 2 | Escalada no Focus Guard     | agents/focus_guard.py     | ativo      |
+| 3 | Alexa via Voice/IFTTT       | core/notifier.py          | parcial    |
+| 4 | Life Guard                  | agents/life_guard.py      | ativo      |
+| 5 | Integração no loop          | agents/focus_guard.py     | ativo      |
+| 6 | CLI vida/pagar/fiz          | main.py                   | ativo      |
+| 7 | Observabilidade de canais   | core/notifier.py          | em avanço  |
++---+-----------------------------+---------------------------+------------+
 ```
 
-**Variáveis de ambiente a adicionar no `.env`:**
+## Contrato por ambiente
 
-```keys
-IFTTT_WEBHOOK_KEY=<sua_key_do_ifttt>
-IFTTT_ALEXA_EVENT=neo_alert
-```
+Esta seção é a parte que faltava.
+Sem ela, o sprint parecia completo quando ainda não era.
 
-**Setup IFTTT (10 minutos):**
+### Ambiente local macOS
 
-1. ifttt.com → Create applet
-2. If: Webhooks → "Receive a web request" → event name: `neo_alert`
-3. Then: Amazon Alexa → "Announce something" → message: `{{Value1}}`
-4. Conectar sua conta Alexa
-5. Pegar a key em: ifttt.com/maker_webhooks/settings
+Suporta:
 
----
+- `mac_push()`
+- `alexa_announce()` via Voice Monkey
+- `alexa_announce()` via IFTTT
+- testes manuais de interrupção real
 
-## Entregável 2 — Escalada por tempo no Focus Guard
+Pré-requisitos:
 
-**Lógica de escalada em `agents/focus_guard.py`:**
+- `osascript` disponível
+- credenciais de Alexa configuradas
+- applets ou Voice Monkey válidos
 
-A função `_run_focus_check` já detecta desvios. Adicionar camada de escalada:
+### Ambiente Railway
+
+Suporta:
+
+- geração de alerta
+- persistência em Redis
+- logs
+- chamada HTTP para Voice Monkey
+- chamada HTTP para IFTTT
+
+Não suporta:
+
+- notificação nativa do macOS
+
+Conclusão brutal:
+
+Se o `focus_guard` roda no Railway:
+
+- ele pode criar alerta
+- ele pode tentar Voice Monkey ou IFTTT
+- ele nunca vai abrir pop-up no seu Mac
+
+## Implementação atual
+
+### 1. `core/notifier.py`
+
+Hoje concentra:
+
+- `notify()`
+- `mac_push()`
+- `alexa_announce()`
+
+Contrato atual:
+
+- `mac_push()` é canal local macOS
+- `alexa_announce()` tenta Voice Monkey primeiro
+- se não houver Voice Monkey, tenta IFTTT
+- se não houver nenhum provider, deve registrar indisponibilidade
+
+### 2. `agents/focus_guard.py`
+
+O `focus_guard` já implementa:
+
+- checagem periódica
+- análise de desvio
+- escalada por tempo de sessão
+- criação de alertas
+- integração com `life_guard`
+
+Escalada atual:
 
 ```python
-# Adicionar no início do arquivo
 ESCALATION_LEVELS = [
-    {"minutes": 30,  "channel": "mac",         "sound": False, "msg": "30 min em {task}. Planejado: {planned}min."},
-    {"minutes": 60,  "channel": "mac",         "sound": True,  "msg": "1 hora em {task}. Hora de checar."},
-    {"minutes": 120, "channel": "mac+alexa",   "sound": True,  "msg": "2 horas em {task}. Para agora."},
-    {"minutes": 240, "channel": "mac+alexa",   "sound": True,  "msg": "4 horas. Sai do computador por 10 minutos."},
+    {"minutes": 30,  "channel": "mac",       "sound": False},
+    {"minutes": 60,  "channel": "mac",       "sound": True},
+    {"minutes": 120, "channel": "mac+alexa", "sound": True},
+    {"minutes": 240, "channel": "mac+alexa", "sound": True},
 ]
-
-def _check_escalation(session_minutes: int, task_title: str, planned_minutes: int) -> None:
-    """Dispara notificação no canal certo baseado no tempo de sessão."""
-    for level in ESCALATION_LEVELS:
-        # dispara apenas uma vez por nível (verificar se já foi enviado hoje)
-        state_key = f"escalation:{datetime.now().date()}:{task_title}:{level['minutes']}"
-        if memory.get_state(state_key):
-            continue
-        if session_minutes >= level["minutes"]:
-            msg = level["msg"].format(task=task_title, planned=planned_minutes)
-            if "mac" in level["channel"]:
-                notifier.mac_push("⏱ NEØ Focus Guard", msg, sound=level["sound"])
-            if "alexa" in level["channel"]:
-                notifier.alexa_announce(msg)
-            memory.set_state(state_key, "sent")
-            break  # só um nível por check
 ```
 
-**Chamar `_check_escalation` dentro de `_run_focus_check`:**
+Essa lógica continua boa.
+O que faltava era o contrato de ambiente.
 
-```python
-# Após calcular session_minutes a partir da sessão ativa
-if active_session and session_minutes:
-    _check_escalation(session_minutes, task_title, planned_minutes)
-```
+### 3. `agents/life_guard.py`
 
----
+O `life_guard` já existe e roda dentro do `focus_guard`.
 
-## Entregável 3 — Life Guard agent
+Cobertura atual:
 
-**Criar `agents/life_guard.py`:**
+- exercício
+- banho
+- almoço
+- jantar
+- hidratação
+- contas a pagar
 
-```python
-"""
-agents/life_guard.py — Guardião de rotinas pessoais
+Variáveis atuais:
 
-Monitora e notifica sobre:
-- Hidratação (a cada 90 min durante horário ativo)
-- Exercício físico (check diário às 7h)
-- Higiene (check às 10h)
-- Refeições (almoço 12h30, jantar 19h30)
-- Finanças (alertas de vencimento próximo)
-
-Não julga. Apenas registra e lembra.
-"""
-
-import os
-import sys
-from datetime import datetime, date, timedelta
-from typing import Optional
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from core import memory, notifier
-
-# ---------------------------------------------------------------------------
-# Rotinas diárias — horário e mensagem
-# ---------------------------------------------------------------------------
-
-```code
-DAILY_ROUTINES = [
-    {
-        "id":      "exercise",
-        "name":    "Exercício",
-        "check_at": "07:00",
-        "message": "Você se exercitou hoje?",
-        "channel": "mac",
-        "sound":   False,
-    },
-    {
-        "id":      "shower",
-        "name":    "Banho",
-        "check_at": "10:00",
-        "message": "Hora do banho.",
-        "channel": "mac",
-        "sound":   False,
-    },
-    {
-        "id":      "lunch",
-        "name":    "Almoço",
-        "check_at": "12:30",
-        "message": "Parar para almoçar.",
-        "channel": "mac+alexa",
-        "sound":   False,
-    },
-    {
-        "id":      "dinner",
-        "name":    "Jantar",
-        "check_at": "19:30",
-        "message": "Parar para jantar.",
-        "channel": "mac",
-        "sound":   False,
-    },
-]
-
-````
-
-WATER_INTERVAL_MINUTES = 90
-ACTIVE_HOURS = (8, 22)  # só lembra entre 8h e 22h
-
-```code
-def check_daily_routines() -> list[dict]:
-    """Verifica rotinas diárias e dispara lembretes."""
-    now = datetime.now()
-    today = date.today().isoformat()
-    triggered = []
-
-    for routine in DAILY_ROUTINES:
-        state_key = f"life_guard:{today}:{routine['id']}"
-        if memory.get_state(state_key):
-            continue  # já enviado hoje
-
-        scheduled_h, scheduled_m = map(int, routine["check_at"].split(":"))
-        scheduled_dt = now.replace(hour=scheduled_h, minute=scheduled_m, second=0)
-
-        # janela de 30 minutos após o horário programado
-        if scheduled_dt <= now <= scheduled_dt + timedelta(minutes=30):
-            _dispatch(routine["message"], routine["channel"], routine.get("sound", False))
-            memory.set_state(state_key, "sent")
-            triggered.append(routine["id"])
-
-    return triggered
-````
-
-```code
-def check_hydration() -> bool:
-    """Lembra de beber água a cada 90 minutos no horário ativo."""
-    now = datetime.now()
-    if not (ACTIVE_HOURS[0] <= now.hour < ACTIVE_HOURS[1]):
-        return False
-
-    state_key = "life_guard:water:last_sent"
-    last_sent_iso = memory.get_state(state_key)
-
-    if last_sent_iso:
-        last_sent = datetime.fromisoformat(last_sent_iso)
-        if (now - last_sent).total_seconds() < WATER_INTERVAL_MINUTES * 60:
-            return False
-
-    _dispatch("Beber água.", "mac", sound=False)
-    memory.set_state(state_key, now.isoformat())
-    return True
-```
-
-def check_finances() -> list[dict]:
-    """
-    Verifica pagamentos próximos do vencimento.
-    Os dados vêm de `life_guard:finances` no Redis (JSON array).
-
-## Formato esperado
-
-```code
-    [
-      {"name": "Cartão XP", "due_day": 15, "amount": 1200.00},
-      {"name": "Aluguel",   "due_day": 5,  "amount": 3500.00},
-    ]
-    """
-    today = date.today()
-    finances_raw = memory.get_state("life_guard:finances")
-    if not finances_raw:
-        return []
-
-    import json
-    finances = json.loads(finances_raw)
-    alerts = []
-
-    for item in finances:
-        due_day = item.get("due_day", 0)
-        days_until = (due_day - today.day) % 30  # aproximação
-
-        if 0 <= days_until <= 3:
-            state_key = f"life_guard:finance:{today.year}-{today.month}:{item['name']}"
-            if memory.get_state(state_key):
-                continue
-            msg = f"{item['name']}: vence em {days_until}d — R$ {item['amount']:.2f}"
-            _dispatch(msg, "mac", sound=True)
-            memory.set_state(state_key, "sent")
-            alerts.append(item)
-
-    return alerts
-
-def _dispatch(message: str, channel: str, sound: bool) -> None:
-    if "mac" in channel:
-        notifier.mac_push("NEØ Life Guard", message, sound=sound)
-    if "alexa" in channel:
-        notifier.alexa_announce(message)
-    notifier.info(f"[life_guard] {message}")
-
-def run_all_checks() -> dict:
-    """Entry point para o loop de background."""
-    return {
-        "routines": check_daily_routines(),
-        "hydration": check_hydration(),
-        "finances": check_finances(),
-    }
-
-def add_finance(name: str, due_day: int, amount: float) -> dict:
-    """Adiciona ou atualiza um item de finanças pessoais."""
-    import json
-    finances_raw = memory.get_state("life_guard:finances") or "[]"
-    finances = json.loads(finances_raw)
-    finances = [f for f in finances if f["name"] != name]  # remove duplicata
-    finances.append({"name": name, "due_day": due_day, "amount": amount})
-    memory.set_state("life_guard:finances", json.dumps(finances))
-    return {"status": "ok", "item": name}
-
-def confirm_routine(routine_id: str) -> dict:
-    """Marca rotina como feita (ex: 'já me exercitei')."""
-    today = date.today().isoformat()
-    memory.set_state(f"life_guard:{today}:{routine_id}:done", "true")
-    return {"status": "confirmed", "routine": routine_id}
-
-def handle_handoff(payload: dict) -> dict:
-    action = payload.get("action")
-    if action == "add_finance":
-        return add_finance(payload["name"], payload["due_day"], payload["amount"])
-    if action == "confirm_routine":
-        return confirm_routine(payload["routine_id"])
-    if action == "check":
-        return run_all_checks()
-    return {"error": f"unknown action: {action}"}
-````
-
-```
-
----
-
-## Entregável 4 — Registrar Life Guard no main.py e Focus Guard
-
-**Em `main.py` / `focus_guard_service.py`, adicionar ao loop de background:**
-
-```python
-from agents import life_guard
-
-# No loop do Focus Guard (a cada 15 min já está rodando)
-# Adicionar:
-life_guard.run_all_checks()
-```
-
-**No CLI (main.py), adicionar comandos:**
-
-```python
-elif command in ["vida", "life"]:
-    result = life_guard.run_all_checks()
-    print(result)
-elif command.startswith("pagar "):
-    # ex: "pagar Cartão XP dia 15 valor 1200"
-    # parsear e chamar life_guard.add_finance(...)
-    pass
-elif command.startswith("fiz "):
-    # ex: "fiz exercicio"
-    routine_map = {"exercicio": "exercise", "banho": "shower"}
-    routine_id = routine_map.get(command.replace("fiz ", "").strip())
-    if routine_id:
-        life_guard.confirm_routine(routine_id)
-```
-
----
-
-## Setup IFTTT + Alexa (passo a passo)
-
-```terminal
-1. Criar conta em ifttt.com
-2. My Applets → New Applet
-3. IF: Webhooks → "Receive a web request"
-   - Event Name: neo_alert
-4. THEN: Amazon Alexa → "Announce something"
-   - Message: {{Value1}}
-5. Salvar
-6. Ir em: ifttt.com/maker_webhooks/settings
-   - Copiar a key (formato: xXxXxXxXx...)
-7. Adicionar no .env:
-   IFTTT_WEBHOOK_KEY=<sua_key>
-   IFTTT_ALEXA_EVENT=neo_alert
-8. Testar:
-   curl -X POST "https://maker.ifttt.com/trigger/neo_alert/with/key/SUA_KEY" \
-     -H "Content-Type: application/json" \
-     -d '{"value1": "Teste da Alexa funcionando"}'
-```
-
----
+- `LIFE_GUARD_ACTIVE_HOUR_START`
+- `LIFE_GUARD_ACTIVE_HOUR_END`
+- `LIFE_GUARD_WATER_INTERVAL`
 
 ## Variáveis de ambiente necessárias
 
-Adicionar ao `.env`:
+### Alexa por Voice Monkey
 
 ```bash
-# Notificações
-IFTTT_WEBHOOK_KEY=           # da conta IFTTT
-IFTTT_ALEXA_EVENT=neo_alert  # nome do evento
+VOICE_MONKEY_TOKEN=
+VOICE_MONKEY_DEVICE=eco-room
+VOICE_MONKEY_VOICE=Ricardo
+```
 
-# Life Guard
+### Alexa por IFTTT
+
+```bash
+IFTTT_WEBHOOK_KEY=
+IFTTT_ALEXA_EVENT=neo_alert
+```
+
+### Life Guard
+
+```bash
 LIFE_GUARD_ACTIVE_HOUR_START=8
 LIFE_GUARD_ACTIVE_HOUR_END=22
 LIFE_GUARD_WATER_INTERVAL=90
 ```
 
----
+## Critérios de aceite corretos
 
-## Critérios de aceite
+Os critérios antigos misturavam local e produção.
+Agora ficam separados.
 
-- [x] `notifier.mac_push("teste", "funciona")` abre pop-up no canto da tela
-- [x] `notifier.alexa_announce("teste")` faz a Alexa falar na sala (Voice Monkey primário, IFTTT fallback)
-- [x] Focus Guard com sessão aberta há 30min → mac push automático
-- [x] Focus Guard com sessão aberta há 2h → mac push + Alexa
-- [x] `python main.py vida` imprime status das rotinas do dia
-- [x] `python main.py fiz banho` confirma a rotina e para o lembrete do dia
-- [x] Finance alert dispara 3 dias antes do vencimento
+### Local macOS
 
-## Nota de implementação
+- `notifier.mac_push("teste", "funciona")` abre pop-up
+- `notifier.alexa_announce("teste")` aciona Alexa se houver provider
+- sessão de foco com 30 min gera aviso local
+- sessão de foco com 2h tenta voz + tela
+- `python main.py vida` imprime status
+- `python main.py fiz banho` confirma a rotina
 
-- `alexa_announce()` implementada com **Voice Monkey** como canal primário (API direta, voz configurável) e **IFTTT** como fallback. O sprint original especificava apenas IFTTT, mas Voice Monkey oferece menor latência e voz personalizada.
-- Life Guard roda automaticamente dentro do loop do Focus Guard (`_run_focus_check` chama `life_guard.run_all_checks()`).
+### Railway
+
+- o deploy sobe sem erro
+- `focus_guard` executa check periódico
+- alerta é registrado no Redis
+- o log explicita se o canal é incompatível
+- Alexa só dispara se houver `VOICE_MONKEY_*` ou `IFTTT_*`
+
+## O que este sprint ainda não concluiu
+
+O sprint não está morto.
+Só ficou mais honesto.
+
+Ainda faltam:
+
+- observabilidade explícita de falha de canal
+- teste automatizado de Voice Monkey e IFTTT
+- separação formal entre "backend gerou alerta" e
+  "usuário recebeu interrupção"
+- configuração declarativa de canais via Sanity
+
+## O que deve ir para o Sanity
+
+Não o tutorial inteiro.
+Só a camada de governança.
+
+Sanity deve definir:
+
+- níveis de escalada
+- mensagem por nível
+- canal por nível
+- ativação/desativação de canais
+- rotinas do `life_guard`
+- janelas de horário ativo
+- política de fallback
+
+Sanity não deve guardar:
+
+- passo a passo de IFTTT
+- pseudo-código histórico
+- suposições locais como se fossem universais
+
+## Conclusão
+
+O sprint acertou a arquitetura-base.
+Errou a metafísica da entrega.
+
+Antes:
+
+- chamou função
+- assumiu notificação
+
+Agora:
+
+- canal precisa existir
+- ambiente precisa suportar
+- credencial precisa estar configurada
+- entrega precisa ser observável
+
+Esse é o ponto em que o sistema deixa de parecer vivo
+e começa a realmente interromper a realidade.

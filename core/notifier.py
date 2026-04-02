@@ -5,6 +5,7 @@
 # Os agentes chamam as funções deste módulo para comunicar eventos.
 
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -154,21 +155,31 @@ def agent_event(message: str, agent: str = "orchestrator") -> None:
 def mac_push(title: str, message: str, sound: bool = False) -> None:
     """Envia notificação nativa macOS via AppleScript."""
     import subprocess
+
+    if sys.platform != "darwin":
+        warning("mac_push ignorado: notificações nativas só funcionam em macOS.", "notifier")
+        return
+
     sound_line = ' sound name "Sosumi"' if sound else ""
     script = f'display notification "{message}" with title "{title}"{sound_line}'
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["osascript", "-e", script],
             capture_output=True,
             timeout=5,
         )
-    except Exception:
-        pass  # nunca quebra o agente por falha de notificação
+        if result.returncode != 0:
+            stderr = (result.stderr or b"").decode("utf-8", errors="ignore").strip()
+            warning(
+                f"mac_push falhou via osascript (code={result.returncode}): {stderr or 'sem stderr'}",
+                "notifier",
+            )
+    except Exception as exc:
+        warning(f"mac_push falhou: {exc}", "notifier")
 
 
 def alexa_announce(message: str) -> None:
     """Dispara anúncio na Alexa. Tenta Voice Monkey primeiro; cai para IFTTT se não configurado."""
-    import os
     import requests
 
     vm_token = os.getenv("VOICE_MONKEY_TOKEN", "")
@@ -176,26 +187,42 @@ def alexa_announce(message: str) -> None:
         try:
             device = os.getenv("VOICE_MONKEY_DEVICE", "eco-room")
             voice = os.getenv("VOICE_MONKEY_VOICE", "Ricardo")
-            requests.get(
+            response = requests.get(
                 "https://api-v2.voicemonkey.io/announcement",
                 params={"token": vm_token, "device": device, "text": message, "voice": voice},
                 timeout=5,
             )
-        except Exception:
-            pass
+            if not response.ok:
+                warning(
+                    f"Voice Monkey falhou ({response.status_code}): {response.text[:160] or 'sem resposta'}",
+                    "notifier",
+                )
+        except Exception as exc:
+            warning(f"Voice Monkey falhou: {exc}", "notifier")
         return
 
     ifttt_key = os.getenv("IFTTT_WEBHOOK_KEY", "")
     if ifttt_key:
         event = os.getenv("IFTTT_ALEXA_EVENT", "neo_alert")
         try:
-            requests.post(
+            response = requests.post(
                 f"https://maker.ifttt.com/trigger/{event}/with/key/{ifttt_key}",
                 json={"value1": message},
                 timeout=5,
             )
-        except Exception:
-            pass
+            if not response.ok:
+                warning(
+                    f"IFTTT Alexa falhou ({response.status_code}): {response.text[:160] or 'sem resposta'}",
+                    "notifier",
+                )
+        except Exception as exc:
+            warning(f"IFTTT Alexa falhou: {exc}", "notifier")
+        return
+
+    warning(
+        "Alexa indisponível: configure VOICE_MONKEY_TOKEN ou IFTTT_WEBHOOK_KEY no ambiente.",
+        "notifier",
+    )
 
 
 # ---------------------------------------------------------------------------
