@@ -147,14 +147,19 @@ Usos não recomendados:
 ### Fase 0. Estabilizar a base atual
 
 - [ ] Fazer commit seletivo do estado seguro
-  - Status: TODO
-  - Log:
-  - Commit: pendente
+  - Status: DONE
+  - Log: commit seguro criado com runtime, testes, docs de governança e higiene mínima de repo.
+  - Commit: `c60b547`
 
 - [ ] Fazer push do estado seguro para `main`
   - Status: TODO
-  - Log:
+  - Log: bloqueado porque `origin/main` está 4 commits à frente. Trabalho publicado em branch segura para não contaminar histórico nem forçar merge.
   - Commit: pendente
+
+- [x] Publicar branch segura com o estado consolidado
+  - Status: DONE
+  - Log: branch `neonode-codex/stabilize-runtime-governance` criada e publicada no remoto com o commit seguro.
+  - Commit: `c60b547`
 
 - [ ] Confirmar Railway estável após push
   - Status: TODO
@@ -166,7 +171,7 @@ Usos não recomendados:
 - [x] Criar contrato recomendado, agente por agente
   - Status: DONE
   - Log: criado documento de contrato com função, entradas, saídas, memória, autoridade, riscos e ordem de formalização dos agentes.
-  - Commit: pendente
+  - Commit: `c60b547`
 
 - [ ] Revisar e aprovar contrato dos agentes
   - Status: TODO
