@@ -293,3 +293,5 @@ Usos não recomendados:
 - trilha `NEXTSTEPS` criada
 - portas locais revisadas
 - papel do Gemma local explicitado
+- sugestões críticas da PR 2 endereçadas com correções de HTMX, consistência de filtros, índice reverso do Notion, teste determinístico, docs e Dockerfile
+- commit de correção da PR 2: `86c0e0f`
