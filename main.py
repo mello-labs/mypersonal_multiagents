@@ -667,6 +667,9 @@ Exemplos:
     fiz_parser = subparsers.add_parser("fiz", help="Confirma rotina feita (ex: fiz banho)")
     fiz_parser.add_argument("rotina", nargs="?", default="")
 
+    # ecosistema
+    subparsers.add_parser("ecosistema", help="Health check e relatório do ecossistema externo")
+
     # calendar
     calendar_parser = subparsers.add_parser("calendar", help="Gerencia integração opcional com Google Calendar")
     cal_sub = calendar_parser.add_subparsers(dest="calendar_action", metavar="AÇÃO")
@@ -722,6 +725,10 @@ def main() -> None:
         cmd_retrospective()
     elif command == "web":
         cmd_web()
+    elif command == "ecosistema":
+        from agents import ecosystem_monitor
+        report = ecosystem_monitor.run()
+        print(report)
     elif command in ("vida", "life"):
         cmd_vida()
     elif command == "pagar":

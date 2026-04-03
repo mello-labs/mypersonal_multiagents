@@ -167,8 +167,8 @@ Usos não recomendados:
   - Log: health check respondeu `db: ok`, sync com Notion trouxe tarefa real e a interface no Railway refletiu agenda e tarefa sincronizadas.
   - Commit: pendente
 
-- [ ] Fechar contrato operacional de notificações
-  - Status: IN_PROGRESS
+- [x] Fechar contrato operacional de notificações
+  - Status: DONE
   - Log: diagnóstico fechado. `focus_guard` gera alerta no Railway, mas `mac_push` não funciona fora de macOS e Alexa depende de `VOICE_MONKEY_*`. Observabilidade do `notifier` foi reforçada e `SPRINT_VIDA.md` reescrito para distinguir local versus Railway.
   - Commit: pendente
 
@@ -280,9 +280,9 @@ Usos não recomendados:
   - Log: sprint reescrito para separar sinais do ecossistema da camada íntima e impedir acoplamento com `focus_guard`.
   - Commit: pendente
 
-- [ ] Implementar Fase 1 do `ecosystem_monitor`
-  - Status: TODO
-  - Log:
+- [x] Implementar Fase 1 do `ecosystem_monitor`
+  - Status: DONE
+  - Log: agente criado em `agents/ecosystem_monitor.py`. Cobre GitHub (6 orgs), Railway (6 serviços via HTTP health check), DexScreener (NEOFLW). Comando `python main.py ecosistema` funcional. Relatório persistido no Redis. Alertas P0 disparam mac_push.
   - Commit: pendente
 
 - [ ] Definir gate automatizado para desbloquear Fase 2 do monitor
