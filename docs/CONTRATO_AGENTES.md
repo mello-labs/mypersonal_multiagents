@@ -30,15 +30,16 @@ O objetivo é fixar função, entrada, saída, memória, autoridade, limites e f
 
 | Agente | Usa LLM | Lê Redis | Escreve Redis | Lê Sanity | Escreve Sanity | Lê Notion | Escreve Notion | Pode publicar |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `orchestrator` | sim | sim | indireto | futuro | não | não | não | não |
-| `focus_guard` | sim | sim | sim | parcial | futuro | sim | não | não |
-| `scheduler` | sim | sim | sim | futuro | futuro | não | não | não |
-| `validator` | sim | sim | sim | futuro | futuro | sim | sim | não |
-| `retrospective` | sim | sim | não | futuro | futuro | sim | sim | não |
-| `notion_sync` | não | sim | sim | não | futuro | sim | sim | não |
-| `calendar_sync` | não | sim | sim | não | futuro | não | não | não |
-| `life_guard` | não | sim | sim | futuro | futuro | não | não | não |
-| `persona_manager` | não | não | não | parcial | futuro | não | não | não |
+| `orchestrator` | sim | sim | indireto | sim | não | não | não | não |
+| `focus_guard` | sim | sim | sim | sim | não | sim | não | não |
+| `scheduler` | sim | sim | sim | sim | não | não | não | não |
+| `validator` | sim | sim | sim | sim | não | sim | sim | não |
+| `retrospective` | sim | sim | não | sim | não | sim | sim | não |
+| `notion_sync` | não | sim | sim | parcial | não | sim | sim | não |
+| `calendar_sync` | não | sim | sim | parcial | não | não | não | não |
+| `life_guard` | não | sim | sim | parcial | não | não | não | não |
+| `persona_manager` | não | não | não | sim | não | não | não | não |
+| `gemma_local` | fallback | não | não | parcial | não | não | não | não |
 
 ## Contrato Recomendado, Agente por Agente
 
@@ -78,11 +79,11 @@ Governança desejada no Sanity:
 
 Estado atual:
 - usa LLM
-- prompts ainda majoritariamente hardcoded
-- depende de personas locais via `persona_manager`
+- prompts `routing`, `synthesis` e `direct` governados pelo Sanity com fallback explícito
+- depende de personas resolvidas por `persona_manager`
 
 Risco atual:
-- governa o fluxo sem ainda estar plenamente governado pelo Sanity
+- ainda governa fallback e política de provider mais no código do que no Studio
 
 ### `focus_guard`
 
@@ -120,12 +121,12 @@ Governança desejada no Sanity:
 - thresholds de escalada
 
 Estado atual:
-- já lê prompt de desvio do Sanity
-- scripts de intervenção ainda têm fallback hardcoded
-- agente mais próximo de governança real
+- lê prompt de desvio do Sanity
+- lê scripts de intervenção do Sanity por ambiente com fallback local
+- é o agente mais maduro na camada de governança
 
 Risco atual:
-- dupla verdade entre Sanity e constantes locais
+- ainda conserva fallback local para não quebrar operação se o Studio falhar
 
 ### `scheduler`
 
@@ -164,11 +165,11 @@ Governança desejada no Sanity:
 
 Estado atual:
 - usa LLM
-- prompt hardcoded
-- sem governança real no Studio
+- prompt `scheduling` governado pelo Sanity com fallback explícito
+- config publicada no Studio
 
 Risco atual:
-- agenda é uma das camadas mais importantes e ainda não está externalizada
+- parâmetros semânticos de carga, pausa e conflito ainda vivem mais no código do que no Studio
 
 ### `validator`
 
@@ -206,10 +207,11 @@ Governança desejada no Sanity:
 
 Estado atual:
 - usa LLM
-- prompt hardcoded
+- prompt `validation` governado pelo Sanity com fallback explícito
+- config publicada no Studio
 
 Risco atual:
-- auditor crítico ainda depende de texto local
+- thresholds de consistência e política de veredicto ainda não foram externalizados por completo
 
 ### `retrospective`
 
@@ -246,10 +248,11 @@ Governança desejada no Sanity:
 
 Estado atual:
 - usa LLM
-- prompt hardcoded
+- prompt `retrospective` governado pelo Sanity com fallback explícito
+- config publicada no Studio
 
 Risco atual:
-- relatório relevante, mas sem camada editorial canônica
+- política de exportação e template final ainda não estão externalizados por completo
 
 ### `notion_sync`
 
@@ -285,7 +288,8 @@ Governança desejada no Sanity:
 
 Estado atual:
 - não usa LLM
-- governança majoritariamente implícita no código
+- `agent_config` publicado no Studio
+- governança ainda majoritariamente implícita no código
 
 Risco atual:
 - reconciliador sem contrato explícito de precedência entre fontes
@@ -321,7 +325,8 @@ Governança desejada no Sanity:
 
 Estado atual:
 - não usa LLM
-- nem sequer está representado de forma completa no Studio atual
+- `agent_config` publicado no Studio
+- integração ainda vive principalmente no código como capacidade opcional
 
 Risco atual:
 - integração opcional ainda vive fora da camada de governança
@@ -360,7 +365,8 @@ Governança desejada no Sanity:
 
 Estado atual:
 - não usa LLM
-- parâmetros em env e código
+- `agent_config` e `persona` publicados no Studio
+- parâmetros centrais ainda vivem em env e código
 
 Risco atual:
 - é um agente de vida, mas ainda sem configuração digna de agente
@@ -394,11 +400,11 @@ Governança desejada no Sanity:
 - versionamento leve
 
 Estado atual:
-- a verdade operacional ainda está em `personas/`
-- o schema `persona` do Sanity existe, mas ainda não substituiu o JSON local
+- Sanity é a fonte primária de persona
+- `personas/` virou fallback explícito de runtime
 
 Risco atual:
-- dupla fonte de verdade na camada de identidade
+- ainda falta fechar versionamento editorial e política explícita de override por fase
 
 ## Agentes Planejados ou Incompletos
 
@@ -413,15 +419,10 @@ Decisão:
 
 ## Ordem Recomendada de Formalização
 
-1. `persona_manager`
-2. `orchestrator`
-3. `scheduler`
-4. `validator`
-5. `focus_guard`
-6. `retrospective`
-7. `notion_sync`
-8. `calendar_sync`
-9. `life_guard`
+1. `notion_sync`
+2. `calendar_sync`
+3. `life_guard`
+4. `gemma_local`
 
 ## Política de Publicação
 

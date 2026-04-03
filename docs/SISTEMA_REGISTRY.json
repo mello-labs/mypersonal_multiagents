@@ -1,0 +1,509 @@
+{
+  "version": 1,
+  "status": "active",
+  "updated_at": "2026-04-03",
+  "project": {
+    "name": "mypersonal_multiagents",
+    "role": "kernel_privado",
+    "canonical_repo": "https://github.com/mello-labs/mypersonal_multiagents",
+    "public_surface": "https://nettomello.eth.limo",
+    "studio_url": "https://neomello-agents.sanity.studio/",
+    "railway_url": "https://mypersonal-multiagents.up.railway.app/"
+  },
+  "layers": {
+    "capture": {
+      "primary": [
+        "notion_tasks",
+        "notion_agenda"
+      ],
+      "optional": [
+        "google_calendar"
+      ],
+      "human_entry": true
+    },
+    "runtime": {
+      "primary": "redis",
+      "role": "estado_quente_operacional"
+    },
+    "governance": {
+      "primary": "sanity",
+      "role": "governanca_semantica_editorial"
+    },
+    "publication": {
+      "gate": "public_artifact",
+      "review_required": true,
+      "distribution": [
+        "ipfs",
+        "ipni",
+        "nettomello.eth.limo"
+      ]
+    }
+  },
+  "precedence": {
+    "policy_doc": "docs/POLITICA_PRECEDENCIA_NOTION.md",
+    "capture_human": "notion",
+    "operational_now": "redis",
+    "semantic_memory": "sanity",
+    "publication_authority": "sanity"
+  },
+  "agents": [
+    {
+      "id": "orchestrator",
+      "file": "agents/orchestrator.py",
+      "kind": "llm_agent",
+      "uses_llm": true,
+      "reads": [
+        "redis",
+        "sanity_persona",
+        "sanity_llm_prompt"
+      ],
+      "writes": [],
+      "handoff_registered": true,
+      "sanity_governance": {
+        "agent_config": true,
+        "persona": "shared",
+        "llm_prompt": [
+          "routing",
+          "synthesis",
+          "direct"
+        ],
+        "intervention_script": false
+      },
+      "publication_authority": false
+    },
+    {
+      "id": "focus_guard",
+      "file": "agents/focus_guard.py",
+      "kind": "llm_agent",
+      "uses_llm": true,
+      "reads": [
+        "redis",
+        "notion",
+        "sanity_llm_prompt",
+        "sanity_intervention_script"
+      ],
+      "writes": [
+        "redis"
+      ],
+      "handoff_registered": true,
+      "sanity_governance": {
+        "agent_config": true,
+        "persona": false,
+        "llm_prompt": [
+          "deviation"
+        ],
+        "intervention_script": true
+      },
+      "publication_authority": false
+    },
+    {
+      "id": "scheduler",
+      "file": "agents/scheduler.py",
+      "kind": "llm_agent",
+      "uses_llm": true,
+      "reads": [
+        "redis",
+        "sanity_llm_prompt"
+      ],
+      "writes": [
+        "redis"
+      ],
+      "handoff_registered": true,
+      "sanity_governance": {
+        "agent_config": true,
+        "persona": false,
+        "llm_prompt": [
+          "scheduling"
+        ],
+        "intervention_script": false
+      },
+      "publication_authority": false
+    },
+    {
+      "id": "validator",
+      "file": "agents/validator.py",
+      "kind": "llm_agent",
+      "uses_llm": true,
+      "reads": [
+        "redis",
+        "notion",
+        "sanity_llm_prompt"
+      ],
+      "writes": [
+        "redis",
+        "notion"
+      ],
+      "handoff_registered": true,
+      "sanity_governance": {
+        "agent_config": true,
+        "persona": false,
+        "llm_prompt": [
+          "validation"
+        ],
+        "intervention_script": false
+      },
+      "publication_authority": false
+    },
+    {
+      "id": "retrospective",
+      "file": "agents/retrospective.py",
+      "kind": "llm_agent",
+      "uses_llm": true,
+      "reads": [
+        "redis",
+        "notion",
+        "sanity_llm_prompt"
+      ],
+      "writes": [
+        "notion"
+      ],
+      "handoff_registered": true,
+      "sanity_governance": {
+        "agent_config": true,
+        "persona": "shared",
+        "llm_prompt": [
+          "retrospective"
+        ],
+        "intervention_script": false
+      },
+      "publication_authority": false
+    },
+    {
+      "id": "notion_sync",
+      "file": "agents/notion_sync.py",
+      "kind": "sync_agent",
+      "uses_llm": false,
+      "reads": [
+        "notion",
+        "redis"
+      ],
+      "writes": [
+        "redis",
+        "notion"
+      ],
+      "handoff_registered": true,
+      "sanity_governance": {
+        "agent_config": true,
+        "persona": false,
+        "llm_prompt": false,
+        "intervention_script": false
+      },
+      "publication_authority": false
+    },
+    {
+      "id": "calendar_sync",
+      "file": "agents/calendar_sync.py",
+      "kind": "optional_sync_capability",
+      "uses_llm": false,
+      "reads": [
+        "google_calendar",
+        "redis"
+      ],
+      "writes": [
+        "redis"
+      ],
+      "handoff_registered": true,
+      "sanity_governance": {
+        "agent_config": true,
+        "persona": false,
+        "llm_prompt": false,
+        "intervention_script": false
+      },
+      "publication_authority": false
+    },
+    {
+      "id": "life_guard",
+      "file": "agents/life_guard.py",
+      "kind": "routine_guard",
+      "uses_llm": false,
+      "reads": [
+        "redis"
+      ],
+      "writes": [
+        "redis"
+      ],
+      "handoff_registered": true,
+      "sanity_governance": {
+        "agent_config": true,
+        "persona": true,
+        "llm_prompt": false,
+        "intervention_script": false
+      },
+      "publication_authority": false
+    },
+    {
+      "id": "persona_manager",
+      "file": "agents/persona_manager.py",
+      "kind": "governance_resolver",
+      "uses_llm": false,
+      "reads": [
+        "sanity_persona",
+        "local_persona_files"
+      ],
+      "writes": [],
+      "handoff_registered": false,
+      "sanity_governance": {
+        "agent_config": true,
+        "persona": true,
+        "llm_prompt": false,
+        "intervention_script": false
+      },
+      "publication_authority": false
+    },
+    {
+      "id": "gemma_local",
+      "file": "core/openai_utils.py",
+      "kind": "llm_fallback_capability",
+      "uses_llm": "fallback",
+      "reads": [
+        "sanity_persona",
+        "agent_config"
+      ],
+      "writes": [],
+      "handoff_registered": false,
+      "sanity_governance": {
+        "agent_config": true,
+        "persona": true,
+        "llm_prompt": false,
+        "intervention_script": false
+      },
+      "publication_authority": false
+    }
+  ],
+  "http_routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "file": "web/app.py",
+      "role": "healthcheck",
+      "connects_to": [
+        "redis"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "file": "web/app.py",
+      "role": "dashboard",
+      "connects_to": [
+        "redis",
+        "persona_manager"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/audit",
+      "file": "web/app.py",
+      "role": "audit_surface",
+      "connects_to": [
+        "redis",
+        "persona_manager"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/agenda",
+      "file": "web/app.py",
+      "role": "agenda_surface",
+      "connects_to": [
+        "redis",
+        "calendar_sync"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/agenda/history",
+      "file": "web/app.py",
+      "role": "agenda_redirect",
+      "connects_to": []
+    },
+    {
+      "method": "POST",
+      "path": "/chat",
+      "file": "web/app.py",
+      "role": "chat_handoff_entry",
+      "connects_to": [
+        "orchestrator"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/status",
+      "file": "web/app.py",
+      "role": "htmx_status_partial",
+      "connects_to": [
+        "redis"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/agenda/import",
+      "file": "web/app.py",
+      "role": "agenda_import",
+      "connects_to": [
+        "notion_sync",
+        "calendar_sync"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/agenda/history/import",
+      "file": "web/app.py",
+      "role": "agenda_history_import",
+      "connects_to": [
+        "notion_sync",
+        "calendar_sync"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/tasks",
+      "file": "web/app.py",
+      "role": "tasks_partial",
+      "connects_to": [
+        "redis"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/tasks-page",
+      "file": "web/app.py",
+      "role": "tasks_surface",
+      "connects_to": [
+        "redis"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/chat-page",
+      "file": "web/app.py",
+      "role": "chat_surface",
+      "connects_to": [
+        "persona_manager"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/task",
+      "file": "web/app.py",
+      "role": "task_create",
+      "connects_to": [
+        "redis"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/task/{task_id}/complete",
+      "file": "web/app.py",
+      "role": "task_complete",
+      "connects_to": [
+        "redis"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/sync",
+      "file": "web/app.py",
+      "role": "notion_sync_trigger",
+      "connects_to": [
+        "notion_sync"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/block/{block_id}/complete",
+      "file": "web/app.py",
+      "role": "agenda_block_complete",
+      "connects_to": [
+        "redis"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/personas",
+      "file": "web/app.py",
+      "role": "persona_list",
+      "connects_to": [
+        "persona_manager"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/persona/{persona_id}",
+      "file": "web/app.py",
+      "role": "persona_switch",
+      "connects_to": [
+        "persona_manager"
+      ]
+    }
+  ],
+  "handoffs": {
+    "registry_file": "agents/orchestrator.py",
+    "handlers": {
+      "scheduler": "agents/scheduler.py",
+      "focus_guard": "agents/focus_guard.py",
+      "notion_sync": "agents/notion_sync.py",
+      "validator": "agents/validator.py",
+      "retrospective": "agents/retrospective.py",
+      "calendar_sync": "agents/calendar_sync.py"
+    }
+  },
+  "cli_entrypoints": [
+    {
+      "command": "sync",
+      "file": "main.py",
+      "connects_to": [
+        "notion_sync"
+      ]
+    },
+    {
+      "command": "focus",
+      "file": "main.py",
+      "connects_to": [
+        "focus_guard",
+        "scheduler",
+        "redis"
+      ]
+    },
+    {
+      "command": "task add",
+      "file": "main.py",
+      "connects_to": [
+        "redis",
+        "notion_sync",
+        "scheduler"
+      ]
+    }
+  ],
+  "sanity": {
+    "project_id": "n4dgl02q",
+    "dataset": "production",
+    "app_id": "v9i4hr48ddw5p63wea2jao6j",
+    "governance_types": [
+      "llm_prompt",
+      "persona",
+      "agent_config",
+      "intervention_script"
+    ],
+    "domain_types": [
+      "project",
+      "area",
+      "task",
+      "agenda_block",
+      "focus_session",
+      "signal",
+      "source",
+      "decision",
+      "public_artifact"
+    ]
+  },
+  "documentation_links": {
+    "agent_contract": "docs/CONTRATO_AGENTES.md",
+    "agent_governance_matrix": "docs/MATRIZ_GOVERNANCA_AGENTES.md",
+    "notion_precedence_policy": "docs/POLITICA_PRECEDENCIA_NOTION.md",
+    "sanity_sovereignty_plan": "docs/PLANO_SOBERANIA_SANITY.md",
+    "signal_source_decision_schema": "docs/SCHEMA_SIGNAL_DECISION.md",
+    "ecosystem_sprint": "docs/SPRINT_ECOSSISTEMA.md",
+    "nextsteps": "docs/NEXTSTEPS.md"
+  }
+}
