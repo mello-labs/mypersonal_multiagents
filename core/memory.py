@@ -168,6 +168,11 @@ def init_db() -> None:
         # Não levanta exceção — o app sobe; falha nas operações reais se Redis não estiver acessível
 
 
+def get_redis() -> redis_lib.Redis:
+    """Retorna o cliente Redis bruto para operações nativas específicas."""
+    return _r()
+
+
 # =============================================================================
 # TASKS
 # =============================================================================

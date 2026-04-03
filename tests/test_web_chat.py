@@ -25,6 +25,9 @@ def test_chat_reaproveita_historico_da_sessao(mem, monkeypatch):
 
     with TestClient(app) as client:
         first = client.post("/chat", data={"message": "primeira pergunta"})
+        # Simula restart de processo limpando cache em RAM.
+        with web_app._chat_sessions_lock:
+            web_app._chat_sessions.clear()
         second = client.post("/chat", data={"message": "segunda pergunta"})
 
     assert first.status_code == 200
@@ -35,6 +38,35 @@ def test_chat_reaproveita_historico_da_sessao(mem, monkeypatch):
         {"role": "assistant", "content": "eco:primeira pergunta"},
     ]
     assert captured_personas[0] == "coordinator"
+
+
+def test_chat_fallback_local_quando_redis_indisponivel(mem, monkeypatch):
+    captured_contexts = []
+
+    def fake_process(message, context=None, persona_id=None):
+        captured_contexts.append(context or {})
+        return f"eco:{message}"
+
+    monkeypatch.setattr(web_app.orchestrator, "process", fake_process)
+    monkeypatch.setattr(web_app.focus_guard, "start_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "stop_guard", lambda: None)
+    monkeypatch.setattr(web_app.focus_guard, "is_running", lambda: False)
+    monkeypatch.setattr(
+        web_app.memory,
+        "get_redis",
+        lambda: (_ for _ in ()).throw(RuntimeError("redis down")),
+    )
+
+    with TestClient(app) as client:
+        first = client.post("/chat", data={"message": "primeira pergunta"})
+        second = client.post("/chat", data={"message": "segunda pergunta"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert captured_contexts[1]["chat_history"] == [
+        {"role": "user", "content": "primeira pergunta"},
+        {"role": "assistant", "content": "eco:primeira pergunta"},
+    ]
 
 
 def test_audit_page_exibe_eventos_alertas_handoffs_e_logs(mem, monkeypatch, tmp_path):

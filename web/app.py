@@ -8,6 +8,8 @@
 #           uvicorn web.app:app --reload --port 8000
 
 import asyncio
+import json
+import os
 import sys
 import threading
 import uuid
@@ -32,6 +34,7 @@ BASE_DIR = Path(__file__).parent
 MAX_CHAT_TURNS = 12
 CHAT_SESSION_COOKIE = "multiagentes_chat_sid"
 PERSONA_COOKIE = "multiagentes_persona"
+CHAT_HISTORY_TTL_SECONDS = int(os.getenv("CHAT_HISTORY_TTL_SECONDS", "86400"))
 _chat_sessions: dict[str, list[dict]] = {}
 _chat_sessions_lock = threading.Lock()
 
@@ -401,17 +404,58 @@ def _get_chat_session_id(request: Request) -> tuple[str, bool]:
     return uuid.uuid4().hex, True
 
 
+def _chat_history_key(session_id: str) -> str:
+    return f"chat:history:{session_id}"
+
+
 def _get_chat_history(session_id: str) -> list[dict]:
+    # Fonte primária: Redis (persistente entre restarts/deploys)
+    try:
+        r = memory.get_redis()
+        raw_items = r.lrange(_chat_history_key(session_id), 0, -1)
+        if raw_items:
+            parsed_history = []
+            for item in raw_items:
+                try:
+                    parsed = json.loads(item)
+                    role = parsed.get("role")
+                    content = parsed.get("content")
+                    if role and content is not None:
+                        parsed_history.append({"role": role, "content": content})
+                except Exception:
+                    continue
+            if parsed_history:
+                with _chat_sessions_lock:
+                    _chat_sessions[session_id] = parsed_history[-MAX_CHAT_TURNS:]
+                return parsed_history[-MAX_CHAT_TURNS:]
+    except Exception:
+        pass
+
+    # Fallback: memória local do processo
     with _chat_sessions_lock:
         history = _chat_sessions.get(session_id, [])
         return list(history)
 
 
 def _store_chat_turn(session_id: str, role: str, content: str) -> None:
+    turn = {"role": role, "content": content}
+
+    # Sempre mantém fallback local
     with _chat_sessions_lock:
         history = list(_chat_sessions.get(session_id, []))
-        history.append({"role": role, "content": content})
+        history.append(turn)
         _chat_sessions[session_id] = history[-MAX_CHAT_TURNS:]
+
+    # Persistência principal em Redis com TTL
+    try:
+        r = memory.get_redis()
+        key = _chat_history_key(session_id)
+        r.rpush(key, json.dumps(turn, ensure_ascii=False))
+        r.ltrim(key, -MAX_CHAT_TURNS, -1)
+        r.expire(key, CHAT_HISTORY_TTL_SECONDS)
+    except Exception:
+        # Se Redis falhar, o fallback local garante continuidade da conversa
+        pass
 
 
 # ---------------------------------------------------------------------------
