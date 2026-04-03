@@ -139,6 +139,10 @@ redis-keys: ## Lista todas as chaves no Redis (ordenadas)
 redis-stats: ## Exibe estatísticas do Redis (memória, conexões, etc.)
 	@docker exec $(REDIS_CONTAINER) redis-cli INFO stats | grep -E "connected|commands|memory|keys"
 
+.PHONY: redis-weekly
+redis-weekly: ## Exibe checklist semanal do Redis na Railway (5 min)
+	@cat docs/redis-weekly-check.md
+
 .PHONY: redis-flush
 redis-flush: ## ⚠️  Apaga TODOS os dados do Redis local
 	@echo "$(RED)⚠️  Isso apaga TODOS os dados locais!$(RESET)"

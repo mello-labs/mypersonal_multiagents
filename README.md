@@ -73,7 +73,7 @@ execução, validação e memória.
 ┃   └─ personas dinâmicas com
 ┃      injeção de system prompt
 ┃
-┃ Ecosystem Monitor (planejado)
+┃ Ecosystem Monitor
 ┃   └─ monitora GitHub, Railway,
 ┃      Vercel, on-chain em 6 orgs
 ┃
@@ -180,7 +180,7 @@ multiagentes/
 │   ├── retrospective.py     retrospectiva semanal
 │   ├── life_guard.py        rotinas pessoais (hidratação, exercício, finanças)
 │   ├── persona_manager.py   seletor de personas dinâmicas
-│   └── ecosystem_monitor.py monitoramento de projetos (planejado)
+│   └── ecosystem_monitor.py monitoramento de projetos
 ├── core/
 │   ├── memory.py            persistência Redis + SQLite fallback
 │   ├── openai_utils.py      wrapper central para OpenAI API
@@ -392,7 +392,7 @@ python main.py calendar status     # Status da integração opcional
 ▓▓▓ SPRINTS
 ────────────────────────────────────────
 └─ docs/SPRINT_VIDA.md         interrupção cognitiva e rotinas (implementado)
-└─ docs/SPRINT_ECOSSISTEMA.md  monitoramento de ecossistema (planejado)
+└─ docs/SPRINT_ECOSSISTEMA.md  monitoramento de ecossistema
 
 ▓▓▓ INTEGRATIONS
 ────────────────────────────────────────

@@ -1,127 +1,629 @@
-<svg width="1600" height="760" viewBox="0 0 1600 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg
+  width="1600"
+  height="760"
+  viewBox="0 0 1600 760"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+>
   <title>Arquitetura Multiagentes</title>
-  <desc>Mapa operacional do ecossistema mypersonal_multiagents com kernel íntimo, órbita externa, Redis, Sanity, Gemma local e superfície pública.</desc>
+  <desc
+  >Mapa operacional do ecossistema mypersonal_multiagents com kernel íntimo, órbita externa, Redis, Sanity, Gemma local e superfície pública.</desc>
 
-  <rect width="1600" height="760" fill="#09131A"/>
-  <rect x="24" y="24" width="1552" height="712" rx="28" fill="url(#bg)" stroke="#6EE7F9" stroke-opacity="0.22"/>
+  <rect width="1600" height="760" fill="#09131A" />
+  <rect
+    x="24"
+    y="24"
+    width="1552"
+    height="712"
+    rx="28"
+    fill="url(#bg)"
+    stroke="#6EE7F9"
+    stroke-opacity="0.22"
+  />
 
-  <text x="54" y="72" fill="#6EE7F9" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18" letter-spacing="2">NEO OPERATING MAP</text>
-  <text x="54" y="116" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="40" font-weight="700">multiagentes</text>
-  <text x="54" y="146" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18">Kernel íntimo, órbita externa, memória quente e governança semântica</text>
+  <text
+    x="54"
+    y="72"
+    fill="#6EE7F9"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="18"
+    letter-spacing="2"
+  >NEO OPERATING MAP</text>
+  <text
+    x="54"
+    y="116"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="40"
+    font-weight="700"
+  >multiagentes</text>
+  <text
+    x="54"
+    y="146"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="18"
+  >Kernel íntimo, órbita externa, memória quente e governança semântica</text>
+  <text
+    x="54"
+    y="170"
+    fill="#6EE7F9"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="13"
+  >updated 2026-04-03 · ecosystem monitor active</text>
 
-  <path d="M1274 48V712" stroke="#6EE7F9" stroke-opacity="0.18" stroke-dasharray="8 8"/>
-  <text x="1206" y="74" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">PUBLICAR SO APOS REVISAO</text>
+  <path
+    d="M1274 48V712"
+    stroke="#6EE7F9"
+    stroke-opacity="0.18"
+    stroke-dasharray="8 8"
+  />
+  <text
+    x="1206"
+    y="74"
+    fill="#D7FF64"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="14"
+  >PUBLICAR SO APOS REVISAO</text>
 
-  <rect x="54" y="186" width="220" height="252" rx="18" fill="#08171F" stroke="#6EE7F9" stroke-opacity="0.28"/>
-  <text x="82" y="224" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="20">ENTRADAS</text>
-  <rect x="82" y="246" width="164" height="42" rx="10" fill="#0F2430"/>
-  <text x="106" y="272" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">Notion Tasks</text>
-  <rect x="82" y="300" width="164" height="42" rx="10" fill="#0F2430"/>
-  <text x="106" y="326" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">Notion Agenda</text>
-  <rect x="82" y="354" width="164" height="42" rx="10" fill="#0F2430"/>
-  <text x="106" y="380" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">CLI / Home UI</text>
-  <rect x="82" y="408" width="164" height="42" rx="10" fill="#0F2430"/>
-  <text x="106" y="434" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">Railway Runtime</text>
+  <rect
+    x="54"
+    y="186"
+    width="220"
+    height="252"
+    rx="18"
+    fill="#08171F"
+    stroke="#6EE7F9"
+    stroke-opacity="0.28"
+  />
+  <text
+    x="82"
+    y="224"
+    fill="#D7FF64"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="20"
+  >ENTRADAS</text>
+  <rect x="82" y="246" width="164" height="42" rx="10" fill="#0F2430" />
+  <text
+    x="106"
+    y="272"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="17"
+  >Notion Tasks</text>
+  <rect x="82" y="300" width="164" height="42" rx="10" fill="#0F2430" />
+  <text
+    x="106"
+    y="326"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="17"
+  >Notion Agenda</text>
+  <rect x="82" y="354" width="164" height="42" rx="10" fill="#0F2430" />
+  <text
+    x="106"
+    y="380"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="17"
+  >CLI / Home UI</text>
+  <rect x="82" y="408" width="164" height="42" rx="10" fill="#0F2430" />
+  <text
+    x="106"
+    y="434"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="17"
+  >Railway Runtime</text>
 
-  <path d="M274 267H346" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
-  <path d="M333 254L346 267L333 280" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M274 321H346" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
-  <path d="M333 308L346 321L333 334" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M274 375H346" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
-  <path d="M333 362L346 375L333 388" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path
+    d="M274 267H346"
+    stroke="#6EE7F9"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <path
+    d="M333 254L346 267L333 280"
+    stroke="#6EE7F9"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M274 321H346"
+    stroke="#6EE7F9"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <path
+    d="M333 308L346 321L333 334"
+    stroke="#6EE7F9"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M274 375H346"
+    stroke="#6EE7F9"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <path
+    d="M333 362L346 375L333 388"
+    stroke="#6EE7F9"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 
-  <rect x="346" y="170" width="430" height="320" rx="22" fill="#08171F" stroke="#6EE7F9" stroke-opacity="0.35"/>
-  <text x="378" y="212" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="22">KERNEL INTIMO</text>
-  <text x="378" y="236" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">foco · agenda · validacao · sync · decisao operacional</text>
+  <rect
+    x="346"
+    y="170"
+    width="430"
+    height="320"
+    rx="22"
+    fill="#08171F"
+    stroke="#6EE7F9"
+    stroke-opacity="0.35"
+  />
+  <text
+    x="378"
+    y="212"
+    fill="#D7FF64"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="22"
+  >KERNEL INTIMO</text>
+  <text
+    x="378"
+    y="236"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >foco · agenda · validacao · sync · decisao operacional</text>
 
-  <rect x="378" y="258" width="156" height="36" rx="10" fill="#102B36"/>
-  <text x="398" y="281" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">orchestrator()</text>
-  <rect x="554" y="258" width="170" height="36" rx="10" fill="#102B36"/>
-  <text x="574" y="281" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">focus_guard()</text>
+  <rect x="378" y="258" width="156" height="36" rx="10" fill="#102B36" />
+  <text
+    x="398"
+    y="281"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="16"
+  >orchestrator()</text>
+  <rect x="554" y="258" width="170" height="36" rx="10" fill="#102B36" />
+  <text
+    x="574"
+    y="281"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="16"
+  >focus_guard()</text>
 
-  <rect x="378" y="308" width="156" height="36" rx="10" fill="#102B36"/>
-  <text x="405" y="331" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">scheduler()</text>
-  <rect x="554" y="308" width="170" height="36" rx="10" fill="#102B36"/>
-  <text x="587" y="331" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">validator()</text>
+  <rect x="378" y="308" width="156" height="36" rx="10" fill="#102B36" />
+  <text
+    x="405"
+    y="331"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="16"
+  >scheduler()</text>
+  <rect x="554" y="308" width="170" height="36" rx="10" fill="#102B36" />
+  <text
+    x="587"
+    y="331"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="16"
+  >validator()</text>
 
-  <rect x="378" y="358" width="156" height="36" rx="10" fill="#102B36"/>
-  <text x="393" y="381" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">notion_sync()</text>
-  <rect x="554" y="358" width="170" height="36" rx="10" fill="#102B36"/>
-  <text x="560" y="381" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">calendar_sync()</text>
+  <rect x="378" y="358" width="156" height="36" rx="10" fill="#102B36" />
+  <text
+    x="393"
+    y="381"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="16"
+  >notion_sync()</text>
+  <rect x="554" y="358" width="170" height="36" rx="10" fill="#102B36" />
+  <text
+    x="560"
+    y="381"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="16"
+  >calendar_sync()</text>
 
-  <text x="560" y="404" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="13">opcional</text>
+  <text
+    x="560"
+    y="404"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="13"
+  >opcional</text>
 
-  <text x="378" y="430" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">life_guard() · retrospective() · persona_manager()</text>
+  <text
+    x="378"
+    y="430"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >life_guard() · retrospective() · persona_manager()</text>
 
-  <rect x="346" y="512" width="430" height="42" rx="14" fill="#0E2029" stroke="#D7FF64" stroke-opacity="0.28"/>
-  <text x="374" y="538" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">notificacoes: mac local · alexa · audit trail · alertas</text>
+  <rect
+    x="346"
+    y="512"
+    width="430"
+    height="42"
+    rx="14"
+    fill="#0E2029"
+    stroke="#D7FF64"
+    stroke-opacity="0.28"
+  />
+  <text
+    x="374"
+    y="538"
+    fill="#D7FF64"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="16"
+  >notificacoes: mac local · alexa · audit trail · alertas</text>
 
-  <rect x="824" y="170" width="314" height="122" rx="22" fill="#08171F" stroke="#D7FF64" stroke-opacity="0.42"/>
-  <text x="854" y="208" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="22">REDIS</text>
-  <text x="854" y="238" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">estado quente</text>
-  <text x="854" y="264" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">agenda · tasks · sessoes · alerts · audit · signals quentes</text>
+  <rect
+    x="824"
+    y="170"
+    width="314"
+    height="122"
+    rx="22"
+    fill="#08171F"
+    stroke="#D7FF64"
+    stroke-opacity="0.42"
+  />
+  <text
+    x="854"
+    y="208"
+    fill="#D7FF64"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="22"
+  >REDIS</text>
+  <text
+    x="854"
+    y="238"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="17"
+  >estado quente</text>
+  <text
+    x="854"
+    y="264"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >agenda · tasks · sessoes · alerts · audit · signals quentes</text>
 
-  <rect x="824" y="314" width="314" height="160" rx="22" fill="#08171F" stroke="#6EE7F9" stroke-opacity="0.35"/>
-  <text x="854" y="352" fill="#6EE7F9" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="22">SANITY</text>
-  <text x="854" y="382" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="17">governanca e camada semantica</text>
-  <text x="854" y="408" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">agent_config · persona · prompt · intervention_script</text>
-  <text x="854" y="432" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">project · area · task · block · signal · source · decision</text>
+  <rect
+    x="824"
+    y="314"
+    width="314"
+    height="160"
+    rx="22"
+    fill="#08171F"
+    stroke="#6EE7F9"
+    stroke-opacity="0.35"
+  />
+  <text
+    x="854"
+    y="352"
+    fill="#6EE7F9"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="22"
+  >SANITY</text>
+  <text
+    x="854"
+    y="382"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="17"
+  >governanca e camada semantica</text>
+  <text
+    x="854"
+    y="408"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >agent_config · persona · prompt · intervention_script</text>
+  <text
+    x="854"
+    y="432"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >project · area · task · block · signal · source · decision</text>
 
-  <path d="M776 230H824" stroke="#D7FF64" stroke-width="3" stroke-linecap="round"/>
-  <path d="M811 217L824 230L811 243" stroke="#D7FF64" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M824 394H776" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
-  <path d="M789 381L776 394L789 407" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="781" y="300" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">governa</text>
+  <path
+    d="M776 230H824"
+    stroke="#D7FF64"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <path
+    d="M811 217L824 230L811 243"
+    stroke="#D7FF64"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M824 394H776"
+    stroke="#6EE7F9"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <path
+    d="M789 381L776 394L789 407"
+    stroke="#6EE7F9"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <text
+    x="781"
+    y="300"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="14"
+  >governa</text>
 
-  <rect x="824" y="504" width="314" height="50" rx="14" fill="#0E2029" stroke="#6EE7F9" stroke-opacity="0.28"/>
-  <text x="846" y="534" fill="#6EE7F9" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="16">ponte: signal() · source() · decision()</text>
+  <rect
+    x="824"
+    y="504"
+    width="314"
+    height="50"
+    rx="14"
+    fill="#0E2029"
+    stroke="#6EE7F9"
+    stroke-opacity="0.28"
+  />
+  <text
+    x="846"
+    y="534"
+    fill="#6EE7F9"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="16"
+  >ponte: signal() · source() · decision()</text>
 
-  <rect x="382" y="84" width="184" height="54" rx="14" fill="#0E2029" stroke="#6EE7F9" stroke-opacity="0.28"/>
-  <text x="408" y="117" fill="#6EE7F9" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="18">Gemma local</text>
-  <text x="570" y="116" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">fallback · triagem</text>
-  <path d="M474 138V170" stroke="#6EE7F9" stroke-width="2.5" stroke-dasharray="7 7"/>
+  <rect
+    x="382"
+    y="84"
+    width="184"
+    height="54"
+    rx="14"
+    fill="#0E2029"
+    stroke="#6EE7F9"
+    stroke-opacity="0.28"
+  />
+  <text
+    x="408"
+    y="117"
+    fill="#6EE7F9"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="18"
+  >Gemma local</text>
+  <text
+    x="570"
+    y="116"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="14"
+  >fallback · triagem</text>
+  <path
+    d="M474 138V170"
+    stroke="#6EE7F9"
+    stroke-width="2.5"
+    stroke-dasharray="7 7"
+  />
 
-  <rect x="54" y="566" width="722" height="134" rx="22" fill="#08171F" stroke="#D7FF64" stroke-opacity="0.32"/>
-  <text x="86" y="604" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="22">ORBITA EXTERNA</text>
-  <text x="86" y="632" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">monitoramento do ecossistema sem contaminar o foco intimo</text>
+  <rect
+    x="54"
+    y="566"
+    width="722"
+    height="134"
+    rx="22"
+    fill="#08171F"
+    stroke="#D7FF64"
+    stroke-opacity="0.32"
+  />
+  <text
+    x="86"
+    y="604"
+    fill="#D7FF64"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="22"
+  >ORBITA EXTERNA</text>
+  <text
+    x="86"
+    y="632"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >monitoramento do ecossistema sem contaminar o foco intimo</text>
 
-  <rect x="86" y="648" width="156" height="34" rx="10" fill="#102B36"/>
-  <text x="106" y="670" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">ecosystem_monitor()</text>
-  <rect x="262" y="648" width="96" height="34" rx="10" fill="#102B36"/>
-  <text x="292" y="670" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">GitHub</text>
-  <rect x="374" y="648" width="104" height="34" rx="10" fill="#102B36"/>
-  <text x="405" y="670" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">Railway</text>
-  <rect x="494" y="648" width="92" height="34" rx="10" fill="#102B36"/>
-  <text x="525" y="670" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">Vercel</text>
-  <rect x="602" y="648" width="96" height="34" rx="10" fill="#102B36"/>
-  <text x="624" y="670" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">On-chain</text>
+  <rect x="86" y="648" width="156" height="34" rx="10" fill="#102B36" />
+  <text
+    x="106"
+    y="670"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >ecosystem_monitor()</text>
+  <rect x="262" y="648" width="96" height="34" rx="10" fill="#102B36" />
+  <text
+    x="292"
+    y="670"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >GitHub</text>
+  <rect x="374" y="648" width="104" height="34" rx="10" fill="#102B36" />
+  <text
+    x="405"
+    y="670"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >Railway</text>
+  <rect x="494" y="648" width="92" height="34" rx="10" fill="#102B36" />
+  <text
+    x="525"
+    y="670"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >Vercel</text>
+  <rect x="602" y="648" width="96" height="34" rx="10" fill="#102B36" />
+  <text
+    x="624"
+    y="670"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >On-chain</text>
 
-  <path d="M776 620H896" stroke="#D7FF64" stroke-width="3" stroke-linecap="round"/>
-  <path d="M883 607L896 620L883 633" stroke="#D7FF64" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path
+    d="M776 620H896"
+    stroke="#D7FF64"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <path
+    d="M883 607L896 620L883 633"
+    stroke="#D7FF64"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 
-  <rect x="1304" y="202" width="220" height="96" rx="18" fill="#08171F" stroke="#D7FF64" stroke-opacity="0.42"/>
-  <text x="1330" y="238" fill="#D7FF64" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="20">PUBLISH GATE</text>
-  <text x="1330" y="265" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">revisao humana</text>
-  <text x="1330" y="286" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">public_artifact</text>
+  <rect
+    x="1304"
+    y="202"
+    width="220"
+    height="96"
+    rx="18"
+    fill="#08171F"
+    stroke="#D7FF64"
+    stroke-opacity="0.42"
+  />
+  <text
+    x="1330"
+    y="238"
+    fill="#D7FF64"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="20"
+  >PUBLISH GATE</text>
+  <text
+    x="1330"
+    y="265"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="14"
+  >revisao humana</text>
+  <text
+    x="1330"
+    y="286"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="14"
+  >public_artifact</text>
 
-  <rect x="1304" y="340" width="220" height="146" rx="18" fill="#08171F" stroke="#6EE7F9" stroke-opacity="0.35"/>
-  <text x="1328" y="376" fill="#6EE7F9" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="20">PUBLIC LAYER</text>
-  <text x="1328" y="403" fill="#E8F4F8" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">neo-mello-eth</text>
-  <text x="1328" y="426" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">nettomello.eth.limo</text>
-  <text x="1328" y="449" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="14">ENS · IPFS · IPNI</text>
+  <rect
+    x="1304"
+    y="340"
+    width="220"
+    height="146"
+    rx="18"
+    fill="#08171F"
+    stroke="#6EE7F9"
+    stroke-opacity="0.35"
+  />
+  <text
+    x="1328"
+    y="376"
+    fill="#6EE7F9"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="20"
+  >PUBLIC LAYER</text>
+  <text
+    x="1328"
+    y="403"
+    fill="#E8F4F8"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >neo-mello-eth</text>
+  <text
+    x="1328"
+    y="426"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="14"
+  >nettomello.eth.limo</text>
+  <text
+    x="1328"
+    y="449"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="14"
+  >ENS · IPFS · IPNI</text>
 
-  <path d="M1138 394H1304" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round"/>
-  <path d="M1291 381L1304 394L1291 407" stroke="#6EE7F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M1414 298V340" stroke="#D7FF64" stroke-width="3" stroke-linecap="round"/>
-  <path d="M1401 327L1414 340L1427 327" stroke="#D7FF64" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path
+    d="M1138 394H1304"
+    stroke="#6EE7F9"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <path
+    d="M1291 381L1304 394L1291 407"
+    stroke="#6EE7F9"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M1414 298V340"
+    stroke="#D7FF64"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <path
+    d="M1401 327L1414 340L1427 327"
+    stroke="#D7FF64"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 
-  <text x="52" y="720" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">Fluxo íntimo: Notion Tasks / Notion Agenda / UI → kernel → Redis ↔ Sanity</text>
-  <text x="782" y="720" fill="#9BB7C3" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="15">Fluxo externo: APIs → ecosystem_monitor → Redis → signal/source/decision → Publish Gate → neo-mello-eth</text>
+  <text
+    x="52"
+    y="720"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >Fluxo íntimo: Notion Tasks / Notion Agenda / UI → kernel → Redis ↔ Sanity</text>
+  <text
+    x="782"
+    y="720"
+    fill="#9BB7C3"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
+    font-size="15"
+  >Fluxo externo: APIs → ecosystem_monitor → Redis → signal/source/decision → Publish Gate → neo-mello-eth</text>
 
   <defs>
-    <linearGradient id="bg" x1="42" y1="32" x2="1540" y2="728" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#10222D"/>
-      <stop offset="1" stop-color="#0B151C"/>
+    <linearGradient
+      id="bg"
+      x1="42"
+      y1="32"
+      x2="1540"
+      y2="728"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop stop-color="#10222D" />
+      <stop offset="1" stop-color="#0B151C" />
     </linearGradient>
   </defs>
 </svg>

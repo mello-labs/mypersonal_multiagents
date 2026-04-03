@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import BackgroundTasks, FastAPI, Form, Query, Request
+from fastapi import FastAPI, Form, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -57,6 +57,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Multiagentes", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 import jinja2 as _jinja2
+
 _jinja2_env = _jinja2.Environment(
     loader=_jinja2.FileSystemLoader(str(BASE_DIR / "templates")),
     autoescape=True,
@@ -116,12 +117,8 @@ def _parse_slot_range(block_date: str | None, time_slot: str | None):
         return None
     try:
         start_str, end_str = [part.strip() for part in time_slot.split("-", 1)]
-        start_dt = datetime.strptime(
-            f"{block_date} {start_str}", "%Y-%m-%d %H:%M"
-        )
-        end_dt = datetime.strptime(
-            f"{block_date} {end_str}", "%Y-%m-%d %H:%M"
-        )
+        start_dt = datetime.strptime(f"{block_date} {start_str}", "%Y-%m-%d %H:%M")
+        end_dt = datetime.strptime(f"{block_date} {end_str}", "%Y-%m-%d %H:%M")
         if end_dt <= start_dt:
             return None
         return start_dt, end_dt
@@ -129,7 +126,9 @@ def _parse_slot_range(block_date: str | None, time_slot: str | None):
         return None
 
 
-def _format_slot_label(block_date: str | None, time_slot: str | None, today: date) -> str:
+def _format_slot_label(
+    block_date: str | None, time_slot: str | None, today: date
+) -> str:
     if not time_slot:
         return ""
     if not block_date:
@@ -243,7 +242,9 @@ def _build_task_views(include_completed: bool = True) -> tuple[list[dict], dict]
         task_views.append(view)
 
     if not include_completed:
-        task_views = [task for task in task_views if task["display_status"] != "Concluído"]
+        task_views = [
+            task for task in task_views if task["display_status"] != "Concluído"
+        ]
 
     status_rank = {"Pendente": 0, "Em progresso": 1, "A fazer": 2, "Concluído": 3}
     task_views.sort(
@@ -257,13 +258,19 @@ def _build_task_views(include_completed: bool = True) -> tuple[list[dict], dict]
 
     overview = {
         "pending_count": sum(
-            1 for task in task_views if task["display_status"] in {"Pendente", "A fazer"}
+            1
+            for task in task_views
+            if task["display_status"] in {"Pendente", "A fazer"}
         ),
-        "overdue_count": sum(1 for task in task_views if task["display_status"] == "Pendente"),
+        "overdue_count": sum(
+            1 for task in task_views if task["display_status"] == "Pendente"
+        ),
         "in_progress_count": sum(
             1 for task in task_views if task["display_status"] == "Em progresso"
         ),
-        "done_count": sum(1 for task in task_views if task["display_status"] == "Concluído"),
+        "done_count": sum(
+            1 for task in task_views if task["display_status"] == "Concluído"
+        ),
     }
     return task_views, overview
 
@@ -514,9 +521,7 @@ async def chat(request: Request, message: str = Form(...)):
         "system_summary": _safe(orchestrator.get_system_summary, {}),
     }
     try:
-        response = await asyncio.to_thread(
-            orchestrator.process, message, context
-        )
+        response = await asyncio.to_thread(orchestrator.process, message, context)
     except Exception as e:
         response = f"⚠️ Erro: {e}"
     _store_chat_turn(session_id, "user", message)
@@ -704,7 +709,7 @@ async def switch_persona(request: Request, persona_id: str):
     # Retorna o dropdown atualizado via HTMX
     options = "".join(
         f'<option value="{p["id"]}"{"selected" if p["id"] == persona_id else ""}>'
-        f'{p["icon"]} {p["short_name"]}</option>'
+        f"{p['icon']} {p['short_name']}</option>"
         for p in all_personas
     )
     html = (
@@ -746,14 +751,16 @@ def _ecosystem_ctx(data: dict) -> dict:
     # Railway services list
     railway_services = []
     for name, info in railway.items():
-        railway_services.append({
-            "name": name,
-            "status": info.get("status", "dim"),
-            "http_code": info.get("http_code"),
-            "response_ms": info.get("response_ms"),
-            "error": info.get("error"),
-            "priority": info.get("priority", "P2"),
-        })
+        railway_services.append(
+            {
+                "name": name,
+                "status": info.get("status", "dim"),
+                "http_code": info.get("http_code"),
+                "response_ms": info.get("response_ms"),
+                "error": info.get("error"),
+                "priority": info.get("priority", "P2"),
+            }
+        )
     # sort: fail first, then warn, then ok; P0 before P1
     order = {"fail": 0, "warn": 1, "ok": 2, "dim": 3}
     railway_services.sort(key=lambda s: (order.get(s["status"], 9), s["priority"]))
@@ -761,13 +768,15 @@ def _ecosystem_ctx(data: dict) -> dict:
     # GitHub orgs list
     github_orgs = []
     for org, info in github.items():
-        github_orgs.append({
-            "name": org,
-            "status": info.get("status", "dim"),
-            "active_24h": info.get("repos_active_24h", 0),
-            "issues": info.get("open_issues", 0),
-            "stale": info.get("repos_stale", []),
-        })
+        github_orgs.append(
+            {
+                "name": org,
+                "status": info.get("status", "dim"),
+                "active_24h": info.get("repos_active_24h", 0),
+                "issues": info.get("open_issues", 0),
+                "stale": info.get("repos_stale", []),
+            }
+        )
 
     # NEOFLW
     neoflw = onchain.get("NEOFLW", {"status": "dim"})
@@ -782,7 +791,9 @@ def _ecosystem_ctx(data: dict) -> dict:
     if rw_warn:
         actions.append(f"investigar: {', '.join(rw_warn)}")
     if stale:
-        actions.append(f"repos estagnados: {', '.join(stale[:5])}{'...' if len(stale) > 5 else ''}")
+        actions.append(
+            f"repos estagnados: {', '.join(stale[:5])}{'...' if len(stale) > 5 else ''}"
+        )
     if neoflw.get("alerts"):
         actions.append("monitorar NEOFLW — alertas ativos")
 
@@ -817,10 +828,18 @@ def _load_ecosystem_data() -> dict:
             return raw
         if isinstance(raw, str):
             import json
+
             return json.loads(raw)
     except Exception:
         pass
-    return {"status": "unknown", "summary": {}, "github": {}, "railway": {}, "onchain": {}, "timestamp": ""}
+    return {
+        "status": "unknown",
+        "summary": {},
+        "github": {},
+        "railway": {},
+        "onchain": {},
+        "timestamp": "",
+    }
 
 
 @app.get("/ecosystem-page", response_class=HTMLResponse)
@@ -829,13 +848,15 @@ async def ecosystem_page(request: Request):
     data = _load_ecosystem_data()
     ctx = _ecosystem_ctx(data)
     sum_ctx = _summary_ctx()
-    ctx.update({
-        "request": request,
-        "page_name": "ecosystem",
-        "summary": sum_ctx["summary"],
-        "task_overview": sum_ctx["task_overview"],
-        **_persona_ctx(request),
-    })
+    ctx.update(
+        {
+            "request": request,
+            "page_name": "ecosystem",
+            "summary": sum_ctx["summary"],
+            "task_overview": sum_ctx["task_overview"],
+            **_persona_ctx(request),
+        }
+    )
     return templates.TemplateResponse(request, "ecosystem_page.html", ctx)
 
 
@@ -845,20 +866,23 @@ async def ecosystem_partial(request: Request):
     data = _load_ecosystem_data()
     ctx = _ecosystem_ctx(data)
     sum_ctx = _summary_ctx()
-    ctx.update({
-        "page_name": "ecosystem",
-        "summary": sum_ctx["summary"],
-        "task_overview": sum_ctx["task_overview"],
-        **_persona_ctx(request),
-    })
+    ctx.update(
+        {
+            "page_name": "ecosystem",
+            "summary": sum_ctx["summary"],
+            "task_overview": sum_ctx["task_overview"],
+            **_persona_ctx(request),
+        }
+    )
     return templates.TemplateResponse(request, "ecosystem_page.html", ctx)
 
 
 @app.post("/ecosystem/run", response_class=HTMLResponse)
 async def ecosystem_run(request: Request):
     """Dispara health check e retorna resultado atualizado."""
-    from agents import ecosystem_monitor
     import asyncio
+
+    from agents import ecosystem_monitor
 
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, ecosystem_monitor.health_check)
@@ -866,12 +890,14 @@ async def ecosystem_run(request: Request):
     data = _load_ecosystem_data()
     ctx = _ecosystem_ctx(data)
     sum_ctx = _summary_ctx()
-    ctx.update({
-        "page_name": "ecosystem",
-        "summary": sum_ctx["summary"],
-        "task_overview": sum_ctx["task_overview"],
-        **_persona_ctx(request),
-    })
+    ctx.update(
+        {
+            "page_name": "ecosystem",
+            "summary": sum_ctx["summary"],
+            "task_overview": sum_ctx["task_overview"],
+            **_persona_ctx(request),
+        }
+    )
     return templates.TemplateResponse(request, "ecosystem_page.html", ctx)
 
 
