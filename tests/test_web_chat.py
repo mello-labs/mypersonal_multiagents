@@ -9,9 +9,11 @@ from web.app import app
 
 def test_chat_reaproveita_historico_da_sessao(mem, monkeypatch):
     captured_contexts = []
+    captured_personas = []
 
-    def fake_process(message, context=None):
+    def fake_process(message, context=None, persona_id=None):
         captured_contexts.append(context or {})
+        captured_personas.append(persona_id)
         return f"eco:{message}"
 
     monkeypatch.setattr(web_app.orchestrator, "process", fake_process)
@@ -32,6 +34,7 @@ def test_chat_reaproveita_historico_da_sessao(mem, monkeypatch):
         {"role": "user", "content": "primeira pergunta"},
         {"role": "assistant", "content": "eco:primeira pergunta"},
     ]
+    assert captured_personas[0] == "coordinator"
 
 
 def test_audit_page_exibe_eventos_alertas_handoffs_e_logs(mem, monkeypatch, tmp_path):

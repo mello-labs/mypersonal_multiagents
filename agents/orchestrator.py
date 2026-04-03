@@ -240,6 +240,40 @@ def _build_rule_based_route(
         term in combined
         for term in ("o que fazer", "como devo agir", "me ajude", "indique o que fazer")
     )
+    asks_capability = any(
+        term in combined
+        for term in (
+            "o que voce consegue",
+            "o que você consegue",
+            "o que pode fazer",
+            "o que voce pode fazer",
+            "capaz de fazer",
+            "seus limites",
+            "suas capacidades",
+            "node infiltrado",
+            "nó infiltrado",
+        )
+    )
+    mentions_deploy = any(
+        term in combined
+        for term in (
+            "railway",
+            "deploy",
+            "deployado",
+            "produção",
+            "producao",
+            "codigo deployado",
+            "código deployado",
+        )
+    )
+
+    if asks_capability and (mentions_deploy or "sistema" in combined):
+        return {
+            "intent": "capabilities_runtime",
+            "handoffs": [],
+            "requires_user_input": False,
+            "clarification_question": None,
+        }
 
     if (
         mentions_delay
@@ -358,6 +392,23 @@ def _format_focus_response(handoff_results: list[dict]) -> Optional[str]:
         lines.append(f"Prioridade operacional agora: '{label}' [{priority}, {status}].")
 
     return "\n".join(lines)
+
+
+def _runtime_capabilities_response(context: Optional[dict] = None) -> str:
+    """Resposta determinística para perguntas sobre capacidade do runtime."""
+    summary = {}
+    if context and isinstance(context.get("system_summary"), dict):
+        summary = context["system_summary"]
+    tasks = summary.get("tasks", {})
+    agenda = summary.get("agenda_today", {})
+    alerts = summary.get("alerts", {})
+
+    return (
+        "Sim. Aqui no chat voce fala com o runtime deployado desta aplicacao.\n"
+        "Eu consigo operar o sistema pelos agentes: status de foco, alertas, agenda, tarefas, sync e validacoes.\n"
+        f"Snapshot agora: tarefas {tasks.get('total', 0)} | agenda {agenda.get('completed', 0)}/{agenda.get('total_blocks', 0)} blocos | alertas {alerts.get('pending', 0)}.\n"
+        "Limites reais: nao tenho shell do servidor por este chat, nao rodo git/comandos de infra e nao publico nada externo sem gate."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -598,6 +649,8 @@ def process(
     # 3. Executar handoffs
     handoffs = routing.get("handoffs", [])
     if not handoffs:
+        if routing.get("intent") == "capabilities_runtime":
+            return _runtime_capabilities_response(context)
         notifier.info("Nenhum agente necessário — respondendo diretamente.", AGENT_NAME)
         return _direct_response(user_input, context, persona_id)
 

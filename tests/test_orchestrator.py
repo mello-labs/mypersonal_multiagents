@@ -100,3 +100,40 @@ def test_sintese_factual_para_foco_nao_usa_llm(mem, monkeypatch):
     assert "11:00-12:00 | Troia" in response
     assert "Há 1 alerta(s) pendente(s)." in response
     assert "Prioridade operacional agora: 'Troia' [Alta, Em progresso]." in response
+
+
+def test_route_intent_capacidade_runtime_sem_llm(mem, monkeypatch):
+    def fail_if_called(**kwargs):
+        raise AssertionError("LLM nao deveria ser chamado para capability route")
+
+    monkeypatch.setattr(orchestrator, "chat_completions", fail_if_called)
+
+    routing = orchestrator.route_intent(
+        "Voce esta no codigo deployado na Railway, o que e capaz de fazer?"
+    )
+
+    assert routing["intent"] == "capabilities_runtime"
+    assert routing["handoffs"] == []
+
+
+def test_process_retorna_capacidades_do_runtime(mem, monkeypatch):
+    def fail_if_called(**kwargs):
+        raise AssertionError("Nao deveria chamar LLM para capabilities_runtime")
+
+    monkeypatch.setattr(orchestrator, "chat_completions", fail_if_called)
+
+    response = orchestrator.process(
+        "Voce esta no codigo deployado na Railway, o que e capaz de fazer?",
+        context={
+            "system_summary": {
+                "tasks": {"total": 5},
+                "agenda_today": {"completed": 2, "total_blocks": 4},
+                "alerts": {"pending": 1},
+            }
+        },
+    )
+
+    assert "runtime deployado" in response.lower()
+    assert "tarefas 5" in response.lower()
+    assert "agenda 2/4" in response.lower()
+    assert "alertas 1" in response.lower()

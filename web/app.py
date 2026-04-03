@@ -521,7 +521,9 @@ async def chat(request: Request, message: str = Form(...)):
         "system_summary": _safe(orchestrator.get_system_summary, {}),
     }
     try:
-        response = await asyncio.to_thread(orchestrator.process, message, context)
+        response = await asyncio.to_thread(
+            orchestrator.process, message, context, persona_id
+        )
     except Exception as e:
         response = f"⚠️ Erro: {e}"
     _store_chat_turn(session_id, "user", message)
