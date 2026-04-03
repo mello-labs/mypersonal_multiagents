@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import agents.orchestrator as orchestrator
 
 
@@ -137,3 +139,16 @@ def test_process_retorna_capacidades_do_runtime(mem, monkeypatch):
     assert "tarefas 5" in response.lower()
     assert "agenda 2/4" in response.lower()
     assert "alertas 1" in response.lower()
+
+
+def test_direct_response_evita_eco_do_input(mem, monkeypatch):
+    parrot = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="e ai NEO"))]
+    )
+
+    monkeypatch.setattr(orchestrator, "chat_completions", lambda **kwargs: parrot)
+
+    response = orchestrator._direct_response("e ai NEO")
+
+    assert "status do sistema" in response.lower()
+    assert "capacidade do deploy" in response.lower()

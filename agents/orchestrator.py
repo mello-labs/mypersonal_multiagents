@@ -411,6 +411,15 @@ def _runtime_capabilities_response(context: Optional[dict] = None) -> str:
     )
 
 
+def _is_parrot_reply(user_input: str, reply: str) -> bool:
+    """Evita respostas que apenas repetem a mensagem do usuário."""
+    norm_user = re.sub(r"\W+", "", user_input or "", flags=re.UNICODE).lower()
+    norm_reply = re.sub(r"\W+", "", reply or "", flags=re.UNICODE).lower()
+    if not norm_user or not norm_reply:
+        return False
+    return norm_reply == norm_user or norm_reply.startswith(norm_user)
+
+
 # ---------------------------------------------------------------------------
 # Roteamento de intenção via LLM
 # ---------------------------------------------------------------------------
@@ -697,7 +706,13 @@ def _direct_response(
             ],
             temperature=get_temperature(persona_id, "direct"),
         )
-        return response.choices[0].message.content.strip()
+        content = response.choices[0].message.content.strip()
+        if _is_parrot_reply(user_input, content):
+            return (
+                "Entendi seu ponto. Se quiser, eu te respondo de forma objetiva em uma destas frentes: "
+                "status do sistema, foco/alertas, agenda/tarefas ou capacidade do deploy."
+            )
+        return content
     except Exception as e:
         return f"Desculpe, ocorreu um erro: {e}"
 

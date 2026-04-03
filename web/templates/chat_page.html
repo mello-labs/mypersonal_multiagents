@@ -1,31 +1,49 @@
-{% extends "base.html" %}
-{% block page_title %}Chat{% endblock %}
-{% block content %}
+{% extends "base.html" %} {% block page_title %}Chat{% endblock %} {% block
+content %}
 
 <div class="chat-msgs" id="chat-msgs">
   <div class="msg">
-    <div class="msg-av">{% if active_persona and active_persona.icon %}{{ active_persona.icon }}{% else %}&#9041;{% endif %}</div>
-    <div class="msg-bub">{% if active_persona and active_persona.name %}{{ active_persona.name }} aqui. Como posso ajudar?{% else %}Ola! Como posso ajudar?{% endif %}</div>
+    <div class="msg-av">
+      {% if active_persona and active_persona.icon %}{{ active_persona.icon }}{%
+      else %}&#9041;{% endif %}
+    </div>
+    <div class="msg-bub">
+      {% if active_persona and active_persona.name %}{{ active_persona.name }}
+      aqui. Como posso ajudar?{% else %}Ola! Como posso ajudar?{% endif %}
+    </div>
   </div>
 </div>
 
-<form class="chat-bar"
-      hx-post="/chat"
-      hx-target="#chat-msgs"
-      hx-swap="beforeend"
-      hx-indicator="#chat-ld"
-      hx-disabled-elt="find input, find button"
-      hx-on::after-swap="scrollChat()">
+<form
+  class="chat-bar"
+  hx-post="/chat"
+  hx-target="#chat-msgs"
+  hx-swap="beforeend"
+  hx-indicator="#chat-ld"
+  hx-disabled-elt="find input, find button"
+  hx-on::after-request="if(event.detail.successful){this.reset()} scrollChat()"
+  hx-on::after-swap="scrollChat()"
+>
   <span id="chat-ld" class="htmx-indicator spinner">&#9679;&#9679;&#9679;</span>
-  <input class="chat-input" type="text" name="message" placeholder="Digite..."
-         autocomplete="off" required aria-label="Mensagem">
+  <input
+    class="chat-input"
+    type="text"
+    name="message"
+    placeholder="Digite..."
+    autocomplete="off"
+    required
+    aria-label="Mensagem"
+  />
   <button class="chat-send" type="submit" aria-label="Enviar">
-    <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
   </button>
 </form>
 
 <script>
-function scrollChat(){var m=document.getElementById('chat-msgs');if(m)m.scrollTop=m.scrollHeight}
+  function scrollChat() {
+    var m = document.getElementById("chat-msgs");
+    if (m) m.scrollTop = m.scrollHeight;
+  }
 </script>
 
 {% endblock %}
