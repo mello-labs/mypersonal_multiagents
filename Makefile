@@ -75,10 +75,25 @@ dev: ## Inicia servidor FastAPI com hot-reload (porta 8000)
 	@REDIS_URL=$${REDIS_URL:-redis://localhost:6379/0} \
 		$(VENV)/bin/uvicorn web.app:app --host 127.0.0.1 --port 8000 --reload
 
+.PHONY: dev-ui
+dev-ui: ## Inicia FastAPI com reload para templates/static (tuning de UI)
+	@echo "$(CYAN)→ http://localhost:8000 (UI reload)$(RESET)"
+	@REDIS_URL=$${REDIS_URL:-redis://localhost:6379/0} \
+		$(VENV)/bin/uvicorn web.app:app --host 127.0.0.1 --port 8000 --reload \
+		--reload-include '*.py' \
+		--reload-include 'web/templates/**/*.html' \
+		--reload-include 'web/static/**/*.css' \
+		--reload-include 'web/static/**/*.js'
+
 .PHONY: dev-full
 dev-full: redis-up ## Sobe Redis local + FastAPI com hot-reload
 	@sleep 1
 	@$(MAKE) dev
+
+.PHONY: dev-full-ui
+dev-full-ui: redis-up ## Sobe Redis local + FastAPI com reload para UI
+	@sleep 1
+	@$(MAKE) dev-ui
 
 .PHONY: guard
 guard: redis-ensure ## Inicia Focus Guard no terminal

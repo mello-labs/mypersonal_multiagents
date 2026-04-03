@@ -1,52 +1,76 @@
-{% extends "base.html" %}
-{% block page_title %}Multiagentes{% endblock %}
-{% block content %}
-
-{% set t = summary.tasks %}
-{% set f = summary.focus %}
-{% set a = summary.agenda_today %}
-{% set al = summary.alerts %}
-{% set tv = task_overview %}
-
-{# ── Greeting ── #}
+{% extends "base.html" %} {% block page_title %}Multiagentes{% endblock %} {%
+block content %} {% set t = summary.tasks %} {% set f = summary.focus %} {% set
+a = summary.agenda_today %} {% set al = summary.alerts %} {% set tv =
+task_overview %} {# ── Greeting ── #}
 <div class="section-title" id="greeting"></div>
 
 {# ── Metrics ── #}
-<div id="stats-row" class="metrics" hx-get="/status" hx-trigger="every 20s" hx-swap="outerHTML">
+<div
+  id="stats-row"
+  class="metrics"
+  hx-get="/status"
+  hx-trigger="every 20s"
+  hx-swap="outerHTML"
+>
   <div class="metric m-blue">
     <div class="metric-lbl">Pendentes</div>
     <div class="metric-val v-blue">{{ tv.pending_count }}</div>
-    <div class="metric-sub">{{ tv.overdue_count }} atrasada{{ 's' if tv.overdue_count != 1 else '' }} &middot; {{ tv.in_progress_count }} em prog</div>
+    <div class="metric-sub">
+      {{ tv.overdue_count }} atrasada{{ 's' if tv.overdue_count != 1 else '' }}
+      &middot; {{ tv.in_progress_count }} em prog
+    </div>
   </div>
   <div class="metric m-green">
     <div class="metric-lbl">Agenda</div>
-    <div class="metric-val v-green">{{ a.completed }}<span class="v-frac">/{{ a.total_blocks }}</span></div>
+    <div class="metric-val v-green">
+      {{ a.completed }}<span class="v-frac">/{{ a.total_blocks }}</span>
+    </div>
     <div class="metric-sub">blocos hoje</div>
   </div>
-  <div class="metric {% if f.guard_running %}m-green{% else %}m-red{% endif %}">
+  <div class="metric {% if f.guard_running %}m-green{% else %}m-dim{% endif %}">
     <div class="metric-lbl">Foco</div>
-    <div class="metric-val v-text {% if f.guard_running %}v-green{% else %}v-red{% endif %}">{% if f.guard_running %}Ativo{% else %}Off{% endif %}</div>
-    <div class="metric-sub">{% if f.on_track %}on track{% else %}desvio detectado{% endif %}</div>
+    <div
+      class="metric-val v-text {% if f.guard_running %}v-green{% else %}v-dim{% endif %}"
+    >
+      {% if f.guard_running %}Ativo{% else %}Off{% endif %}
+    </div>
+    <div class="metric-sub">
+      {% if f.on_track %}on track{% else %}desvio detectado{% endif %}
+    </div>
   </div>
   <div class="metric {% if al.pending > 0 %}m-red{% else %}m-dim{% endif %}">
     <div class="metric-lbl">Alertas</div>
-    <div class="metric-val {% if al.pending > 0 %}v-red{% else %}v-dim{% endif %}">{{ al.pending }}</div>
+    <div
+      class="metric-val {% if al.pending > 0 %}v-red{% else %}v-dim{% endif %}"
+    >
+      {{ al.pending }}
+    </div>
     <div class="metric-sub">pendente{{ 's' if al.pending != 1 else '' }}</div>
   </div>
 </div>
 
 {% if sync_msg is defined %}
 <div class="toast toast-ok">{{ sync_msg }}</div>
-{% endif %}
-
-{# ── Agenda hoje ── #}
+{% endif %} {# ── Agenda hoje ── #}
 <div class="card">
   <div class="card-hd">
     <span class="card-lbl">Agenda hoje</span>
-    <button class="card-act" hx-get="/agenda" hx-target="#agenda-body"
-            hx-swap="innerHTML" aria-label="Atualizar">Atualizar</button>
+    <button
+      class="card-act"
+      hx-get="/agenda"
+      hx-target="#agenda-body"
+      hx-swap="innerHTML"
+      aria-label="Atualizar"
+    >
+      Atualizar
+    </button>
   </div>
-  <div id="agenda-body" hx-get="/agenda" hx-trigger="every 20s" hx-swap="innerHTML">
+  <div
+    id="agenda-body"
+    hx-get="/agenda"
+    hx-trigger="every 20s"
+    hx-swap="innerHTML"
+  >
     {% include "partials/agenda.html" %}
   </div>
 </div>
@@ -57,18 +81,25 @@
     <span class="card-lbl">Tarefas</span>
     <a href="/tasks-page" class="card-act">Ver todas &rsaquo;</a>
   </div>
-  <div id="tasks-body" hx-get="/tasks" hx-trigger="every 20s" hx-swap="innerHTML">
+  <div
+    id="tasks-body"
+    hx-get="/tasks"
+    hx-trigger="every 20s"
+    hx-swap="innerHTML"
+  >
     {% include "partials/tasks.html" %}
   </div>
 </div>
 
 <script>
-!function(){
-  var h=new Date().getHours(),g='Boa noite';
-  if(h>=5&&h<12)g='Bom dia';else if(h>=12&&h<18)g='Boa tarde';
-  var el=document.getElementById('greeting');
-  if(el)el.textContent=g;
-}();
+  !(function () {
+    var h = new Date().getHours(),
+      g = "Boa noite";
+    if (h >= 5 && h < 12) g = "Bom dia";
+    else if (h >= 12 && h < 18) g = "Boa tarde";
+    var el = document.getElementById("greeting");
+    if (el) el.textContent = g;
+  })();
 </script>
 
 {% endblock %}
