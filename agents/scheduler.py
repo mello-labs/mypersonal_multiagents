@@ -243,7 +243,9 @@ def auto_reschedule_block(
         return {"status": "skipped", "reason": "Time slot inválido."}
 
     start_dt, end_dt = block_range
-    duration_minutes = max(int((end_dt - start_dt).total_seconds() / 60), 25)
+    _params = sanity_client.get_agent_parameters(AGENT_NAME)
+    _min_block = int(_params.get("minimum_block_minutes") or 25)
+    duration_minutes = max(int((end_dt - start_dt).total_seconds() / 60), _min_block)
     now_dt = reference_time or datetime.now()
     same_day_blocks = memory.get_agenda_for_date(block_date)
 

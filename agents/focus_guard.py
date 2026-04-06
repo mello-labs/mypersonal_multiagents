@@ -432,8 +432,23 @@ def _run_differential_sync() -> None:
 
 def _background_loop() -> None:
     """Thread principal do Focus Guard — roda o scheduler.run_pending() em loop."""
+    # Lê configuração do Sanity; cai nos valores de env/config.py se indisponível
+    cfg = sanity_client.get_agent_config(AGENT_NAME) or {}
+    if not cfg.get("enabled", True):
+        notifier.warning(
+            "Focus Guard desabilitado via Sanity (agent_config.enabled=false). Encerrando loop.",
+            AGENT_NAME,
+        )
+        return
+    interval = int(cfg.get("check_interval_minutes") or FOCUS_CHECK_INTERVAL_MINUTES)
+    if interval != FOCUS_CHECK_INTERVAL_MINUTES:
+        notifier.info(
+            f"Intervalo de check lido do Sanity: {interval} min (env={FOCUS_CHECK_INTERVAL_MINUTES}).",
+            AGENT_NAME,
+        )
+
     # Configura o job periódico de check de foco
-    schedule.every(FOCUS_CHECK_INTERVAL_MINUTES).minutes.do(_run_focus_check)
+    schedule.every(interval).minutes.do(_run_focus_check)
 
     # Configura sync diferencial periódico
     schedule.every(NOTION_SYNC_INTERVAL_MINUTES).minutes.do(_run_differential_sync)

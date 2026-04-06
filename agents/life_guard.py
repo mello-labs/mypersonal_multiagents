@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import memory, notifier
+from core import memory, notifier, sanity_client
 
 AGENT_NAME = "life_guard"
 
@@ -179,6 +179,9 @@ def check_finances() -> list:
 
 def run_all_checks() -> dict:
     """Entry point para o loop de background."""
+    if not sanity_client.is_agent_enabled(AGENT_NAME, default=True):
+        notifier.info("Life Guard desabilitado via Sanity (agent_config.enabled=false).", AGENT_NAME)
+        return {"routines": [], "hydration": {}, "finances": []}
     return {
         "routines":  check_daily_routines(),
         "hydration": check_hydration(),

@@ -108,6 +108,36 @@ def get_agent_config(agent_name: str) -> Optional[dict]:
     )
 
 
+def get_agent_parameters(agent_name: str) -> dict:
+    """
+    Retorna os parâmetros do agent_config como dict Python.
+    O campo `parameters` é armazenado como JSON string no Sanity.
+    Retorna {} se o agente não existir ou não tiver parâmetros.
+    """
+    import json as _json
+    cfg = get_agent_config(agent_name)
+    if not cfg:
+        return {}
+    raw = cfg.get("parameters") or ""
+    if not raw:
+        return {}
+    try:
+        return _json.loads(raw)
+    except Exception:
+        return {}
+
+
+def is_agent_enabled(agent_name: str, default: bool = True) -> bool:
+    """
+    Retorna se um agente está habilitado no Sanity.
+    Usa `default` se o Sanity não estiver configurado ou o agente não existir.
+    """
+    cfg = get_agent_config(agent_name)
+    if cfg is None:
+        return default
+    return bool(cfg.get("enabled", default))
+
+
 # ---------------------------------------------------------------------------
 # Scripts de intervenção (Focus Guard / escalada)
 # ---------------------------------------------------------------------------
