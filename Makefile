@@ -100,42 +100,41 @@ guard: redis-ensure ## Inicia Focus Guard no terminal
 	@$(PY) main.py
 
 # =============================================================================
-# REDIS LOCAL (Docker)
+# REDIS LOCAL (brew service — nativo macOS)
 # =============================================================================
 
 REDIS_CONTAINER := multiagentes-redis
+BREW := /opt/homebrew/bin/brew
 
 .PHONY: brew-redis
-brew-redis: ## Instala Redis via Homebrew e inicia como serviço
-	@brew install redis
-	@brew services start redis
+brew-redis: ## Instala Redis via Homebrew e inicia como serviço permanente
+	@$(BREW) install redis
+	@$(BREW) services start redis
 	@echo "$(GREEN)✓ Redis instalado e rodando via brew$(RESET)"
 
 .PHONY: redis-up
-redis-up: ## Sobe Redis local via Docker (porta 6379)
-	@docker run -d --rm \
+redis-up: ## Garante que Redis está rodando (brew service → Docker fallback)
+	@/opt/homebrew/opt/redis/bin/redis-cli ping > /dev/null 2>&1 && \
+		echo "$(GREEN)✓ Redis rodando em localhost:6379 (brew service)$(RESET)" && exit 0; \
+	$(BREW) services start redis > /dev/null 2>&1 && sleep 0.5 && \
+		/opt/homebrew/opt/redis/bin/redis-cli ping > /dev/null 2>&1 && \
+		echo "$(GREEN)✓ Redis iniciado via brew services$(RESET)" && exit 0; \
+	docker run -d --rm \
 		--name $(REDIS_CONTAINER) \
 		-p 6379:6379 \
 		redis:7-alpine \
-		> /dev/null 2>&1 || true
-	@sleep 0.5
-	@echo "$(GREEN)✓ Redis rodando em localhost:6379$(RESET)"
+		> /dev/null 2>&1 || true; \
+	sleep 0.5; \
+	echo "$(YELLOW)✓ Redis iniciado via Docker (fallback)$(RESET)"
 
 .PHONY: redis-ensure
-redis-ensure: ## Garante que Redis está rodando (brew → Docker → erro)
-	@redis-cli ping > /dev/null 2>&1 && exit 0; \
-	if command -v redis-server > /dev/null 2>&1; then \
-		redis-server --daemonize yes --loglevel warning > /dev/null 2>&1; \
-		sleep 0.6; \
-		echo "$(GREEN)✓ Redis iniciado (redis-server)$(RESET)"; \
-	elif command -v docker > /dev/null 2>&1; then \
-		docker run -d --rm --name $(REDIS_CONTAINER) -p 6379:6379 redis:7-alpine > /dev/null 2>&1 || true; \
-		sleep 0.8; \
-		echo "$(GREEN)✓ Redis iniciado (Docker)$(RESET)"; \
-	else \
-		echo "$(RED)✗ Redis não encontrado. Instale com: brew install redis$(RESET)"; \
-		exit 1; \
-	fi
+redis-ensure: ## Garante que Redis está respondendo antes de rodar agentes
+	@/opt/homebrew/opt/redis/bin/redis-cli ping > /dev/null 2>&1 && exit 0; \
+	$(BREW) services start redis > /dev/null 2>&1; \
+	sleep 0.6; \
+	/opt/homebrew/opt/redis/bin/redis-cli ping > /dev/null 2>&1 && exit 0; \
+	echo "$(RED)✗ Redis indisponível. Rode: make brew-redis$(RESET)"; \
+	exit 1
 
 .PHONY: redis-down
 redis-down: ## Para o Redis local Docker

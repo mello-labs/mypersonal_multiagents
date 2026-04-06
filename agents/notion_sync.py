@@ -378,8 +378,22 @@ def sync_tasks_to_local() -> int:
             # Tarefa já existe — garante bloco de agenda se tiver horário
             _maybe_create_agenda_block(existing["id"], nt)
 
+    # Reconciliação: remove do Redis tarefas que já não existem no Notion
+    notion_ids = {nt["notion_page_id"] for nt in notion_tasks if nt.get("notion_page_id")}
+    removed = 0
+    for lt in memory.list_all_tasks():
+        local_notion_id = lt.get("notion_page_id")
+        if local_notion_id and local_notion_id not in notion_ids:
+            memory.delete_task(lt["id"])
+            removed += 1
+            notifier.info(
+                f"Tarefa removida do Redis (não existe mais no Notion): "
+                f"id={lt['id']} title='{lt.get('title')}'",
+                AGENT_NAME,
+            )
+
     notifier.success(
-        f"Sincronização concluída: {count} tarefa(s) nova(s) importadas.", AGENT_NAME
+        f"Sincronização concluída: {count} nova(s), {removed} removida(s).", AGENT_NAME
     )
     return count
 

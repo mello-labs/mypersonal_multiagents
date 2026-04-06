@@ -301,6 +301,18 @@ def update_task_notion_id(task_id: int, notion_page_id: str) -> None:
     r.set(f"tasks:notion:{notion_page_id}", task_id)
 
 
+def delete_task(task_id: int) -> None:
+    """Remove uma tarefa do Redis (hash + índices tasks:all e tasks:notion)."""
+    with _lock:
+        r = _r()
+        task_key = f"task:{task_id}"
+        notion_page_id = r.hget(task_key, "notion_page_id")
+        r.delete(task_key)
+        r.zrem("tasks:all", str(task_id))
+        if notion_page_id:
+            r.delete(f"tasks:notion:{notion_page_id}")
+
+
 # =============================================================================
 # AGENDA BLOCKS
 # =============================================================================

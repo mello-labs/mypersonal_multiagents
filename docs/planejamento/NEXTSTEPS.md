@@ -76,6 +76,7 @@ Motivo:
 
 - adicionar `.DS_Store` ao `.gitignore` se aparecer novamente
 - avaliar se `dump.rdb` deve ser removido do versionamento, não só ignorado
+- Redis local migrado de Docker para brew service nativo (`redis 8.6.2`) em 2026-04-06 — Docker não é mais necessário para notificações locais
 
 ## Análise de Portas Abertas
 
@@ -172,6 +173,16 @@ Usos não recomendados:
 - [x] Fechar contrato operacional de notificações
   - Status: DONE
   - Log: diagnóstico fechado. `focus_guard` gera alerta no Railway, mas `mac_push` não funciona fora de macOS e Alexa depende de `VOICE_MONKEY_*`. Observabilidade do `notifier` foi reforçada e `docs/planejamento/SPRINT_VIDA.md` reescrito para distinguir local versus Railway.
+  - Commit: pendente
+
+- [x] Corrigir confiabilidade do chat web (contexto + resposta operacional)
+  - Status: DONE
+  - Log: chat passou a persistir histórico por sessão no Redis com TTL e fallback local, recebeu rota determinística para perguntas sobre capacidade do deploy e proteção anti-resposta papagaio.
+  - Commit: `59250b9`, `5c6af40`, `0ac0cc6`
+
+- [ ] Validar UX do chat no iPhone após deploy Railway
+  - Status: TODO
+  - Log: confirmar se input limpa após envio, se contexto persiste após refresh e se respostas de capacidade do sistema não caem em texto genérico.
   - Commit: pendente
 
 ### Fase 1. Governança dos agentes
@@ -336,6 +347,12 @@ Usos não recomendados:
 - sugestões críticas da PR 2 endereçadas com correções de HTMX, consistência de filtros, índice reverso do Notion, teste determinístico, docs e Dockerfile
 - commit de correção da PR 2: `86c0e0f`
 
+### 2026-04-06
+
+- Redis local migrado de Docker para `brew services` (redis 8.6.2 nativo macOS)
+- `focus_guard_service` (launchd) passou a reconectar automaticamente — notificações macOS restauradas
+- Makefile atualizado: `redis-up` e `redis-ensure` agora priorizam brew service, Docker fica como fallback
+
 ### 2026-04-03
 
 - `SPRINT_ECOSSISTEMA` reposicionado como órbita externa do kernel
@@ -344,3 +361,6 @@ Usos não recomendados:
 - criado `config/ecosystem.yml`
 - criado `config/alert_thresholds.yml`
 - trilhas do plano, sprint e next steps foram amarradas
+- docs reorganizados por taxonomia com `docs/INDEX.md` como entrada única (`257fa29`)
+- baseline documental tagueado e publicado: `docs-aligned-2026-04-03`
+- chat web reforçado com resposta determinística de capacidade, persistência em Redis e proteção anti-eco (`59250b9`, `5c6af40`, `0ac0cc6`)

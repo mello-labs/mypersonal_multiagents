@@ -702,10 +702,12 @@ async def complete_task(request: Request, task_id: int):
 
 @app.post("/sync", response_class=HTMLResponse)
 async def sync(request: Request):
-    """Sync com Notion — I/O bloqueante em thread pool; retorna imediatamente."""
+    """Full sync com Notion — reconcilia Redis com o estado atual do Notion.
+    Remove tarefas deletadas no Notion, importa novas e atualiza existentes.
+    I/O bloqueante em thread pool."""
     try:
-        count = await asyncio.to_thread(notion_sync.sync_differential)
-        sync_msg = f"{count} tarefa(s) sincronizada(s)."
+        count = await asyncio.to_thread(notion_sync.sync_tasks_to_local)
+        sync_msg = f"Sync completo: {count} tarefa(s) atualizada(s)."
     except Exception as e:
         sync_msg = f"Sync falhou: {str(e)[:80]}"
     return HTMLResponse(f'<div class="sync-toast">{sync_msg}</div>')
