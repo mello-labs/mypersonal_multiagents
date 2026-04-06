@@ -58,15 +58,38 @@ summary.agenda_today %} {% set al = summary.alerts %}
 
 {# ── Alertas ── #}
 <div class="card">
-  <div class="card-hd"><span class="card-lbl">Alertas</span></div>
+  <div class="card-hd">
+    <span class="card-lbl">Alertas</span>
+    {% if alerts and alerts | selectattr("acknowledged", "equalto", 0) | list %}
+    <button
+      class="card-act"
+      hx-post="/alerts/dismiss-all"
+      hx-target="#alerts-list"
+      hx-swap="innerHTML"
+      hx-confirm="Descartar todos os alertas pendentes?"
+    >Limpar tudo</button>
+    {% endif %}
+  </div>
+  <div id="alerts-list">
   {% if alerts %} {% for alert in alerts %}
-  <div class="ls-item">
+  <div class="ls-item" id="alert-{{ alert.id }}">
     <div class="ls-top">
       <span class="ls-title">{{ alert.message }}</span>
-      <span
-        class="badge {% if alert.acknowledged %}badge-ok{% else %}badge-warn{% endif %}"
-        >{{ alert.alert_type }}</span
-      >
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span class="badge {% if alert.acknowledged %}badge-ok{% else %}badge-warn{% endif %}">
+          {{ alert.alert_type }}
+        </span>
+        {% if not alert.acknowledged %}
+        <button
+          class="tsk-btn"
+          style="width:26px;height:26px;font-size:13px;"
+          hx-post="/alert/{{ alert.id }}/dismiss"
+          hx-target="#alert-{{ alert.id }}"
+          hx-swap="outerHTML"
+          title="Descartar"
+        >✕</button>
+        {% endif %}
+      </div>
     </div>
     <div class="ls-meta">
       <span>{{ alert.created_at }}</span>
@@ -77,6 +100,7 @@ summary.agenda_today %} {% set al = summary.alerts %}
   {% endfor %} {% else %}
   <div class="empty">Sem alertas</div>
   {% endif %}
+  </div>
 </div>
 
 {# ── Handoffs ── #}

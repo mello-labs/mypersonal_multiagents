@@ -15,7 +15,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import notifier, sanity_client
+from core import memory, notifier, sanity_client
 
 _PERSONAS_DIR = Path(__file__).parent.parent / "personas"
 _DEFAULT_PERSONA_ID = "coordinator"
@@ -100,6 +100,13 @@ def _load_personas() -> None:
     _personas.clear()
     _personas.update(merged)
     global _active_persona_id
+    # Restaura a persona ativa do Redis (sobrevive a restarts do servidor)
+    try:
+        saved = memory.get_state("active_persona_id")
+        if saved and saved in _personas:
+            _active_persona_id = saved
+    except Exception:
+        pass
     if _active_persona_id not in _personas:
         _active_persona_id = (
             _DEFAULT_PERSONA_ID if _DEFAULT_PERSONA_ID in _personas else next(iter(_personas), _DEFAULT_PERSONA_ID)
@@ -150,11 +157,15 @@ def get_active_persona_id() -> str:
 
 
 def set_active_persona(persona_id: str) -> bool:
-    """Define a persona ativa. Retorna True se persona existe."""
+    """Define a persona ativa. Persiste no Redis para sobreviver a restarts."""
     global _active_persona_id
     _ensure_loaded()
     if persona_id in _personas:
         _active_persona_id = persona_id
+        try:
+            memory.set_state("active_persona_id", persona_id)
+        except Exception:
+            pass  # nunca falha por Redis indisponível
         return True
     return False
 

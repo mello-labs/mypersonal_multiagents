@@ -504,6 +504,24 @@ async def audit(request: Request):
     return templates.TemplateResponse(request, "audit.html", ctx)
 
 
+@app.post("/alert/{alert_id}/dismiss", response_class=HTMLResponse)
+async def dismiss_alert(alert_id: int):
+    """Descarta um alerta individual — remove de alerts:pending."""
+    _safe(lambda: memory.acknowledge_alert(alert_id), None)
+    return HTMLResponse("")  # HTMX remove o elemento com hx-swap="outerHTML"
+
+
+@app.post("/alerts/dismiss-all", response_class=HTMLResponse)
+async def dismiss_all_alerts():
+    """Descarta todos os alertas pendentes de uma vez."""
+    pending = _safe(lambda: memory.get_pending_alerts(), []) or []
+    for alert in pending:
+        _safe(lambda a=alert: memory.acknowledge_alert(a["id"]), None)
+    return HTMLResponse(
+        '<div class="empty">Sem alertas pendentes</div>'
+    )
+
+
 @app.get("/agenda", response_class=HTMLResponse)
 async def agenda(
     request: Request,
