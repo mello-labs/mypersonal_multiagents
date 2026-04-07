@@ -51,29 +51,22 @@
 <div class="card">
   <div class="card-hd">
     <span class="card-lbl">Agenda hoje</span>
-    <div style="display:flex;gap:12px;align-items:center">
-      <button
-        class="card-act"
-        style="color:var(--t3);font-size:12px"
-        hx-post="/sync"
-        hx-target="#sync-result"
-        hx-swap="innerHTML"
-        hx-disabled-elt="this"
-        title="Sincronizar com Notion"
-      >↻ Sync</button>
-      <button
-        class="card-act"
-        hx-get="/agenda"
-        hx-target="#agenda-body"
-        hx-swap="innerHTML"
-      >Atualizar</button>
-    </div>
+    <button
+      class="card-act"
+      id="sync-btn"
+      hx-post="/sync"
+      hx-target="#sync-result"
+      hx-swap="innerHTML"
+      hx-disabled-elt="this"
+      hx-on::after-request="setTimeout(function(){ htmx.trigger(document.getElementById('agenda-body'), 'refresh') }, 300)"
+      title="Sincronizar com Notion e atualizar"
+    >↻ Sync</button>
   </div>
   <div id="sync-result" style="font-size:11px;color:var(--t3);padding:0 16px 4px;min-height:0"></div>
   <div
     id="agenda-body"
     hx-get="/agenda"
-    hx-trigger="every 30s"
+    hx-trigger="every 30s, refresh"
     hx-swap="innerHTML"
   >
     {% include "partials/agenda.html" %}
