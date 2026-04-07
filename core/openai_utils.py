@@ -1,100 +1,168 @@
 # =============================================================================
-# core/openai_utils.py — Helper OpenAI com fallback para modelo de contingência
+# core/openai_utils.py — Cadeia de fallback para modelos LLM
 # =============================================================================
-# Cadeia de fallback:
-#   1. OpenAI (OPENAI_MODEL, ex: gpt-4o-mini)
-#   2. OpenAI fallback (OPENAI_FALLBACK_MODEL, ex: gpt-3.5-turbo)
-#   3. Local — Docker Model Runner (Gemma3 4B-F16 em http://localhost:12434/v1)
+# Ordem de tentativa:
+#   1. OpenAI cloud   → OPENAI_MODEL          (ex: gpt-4o-mini)
+#   2. OpenAI cloud   → OPENAI_FALLBACK_MODEL  (ex: gpt-3.5-turbo)
+#   3. Local          → LOCAL_MODEL_NAME       (Gemma3 via Docker Model Runner)
+# =============================================================================
 
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from functools import cached_property
+from typing import Any
+
+import httpx
 from openai import OpenAI
 
 from config import (
-    OPENAI_API_KEY,
-    OPENAI_MODEL,
-    OPENAI_FALLBACK_MODEL,
-    LOCAL_MODEL_ENABLED,
     LOCAL_MODEL_BASE_URL,
+    LOCAL_MODEL_ENABLED,
     LOCAL_MODEL_NAME,
+    OPENAI_API_KEY,
+    OPENAI_FALLBACK_MODEL,
+    OPENAI_MODEL,
 )
 from core import notifier
 
-# Cliente OpenAI cloud
-_client = OpenAI(api_key=OPENAI_API_KEY)
-
-# Cliente local (Docker Model Runner via Unix socket) — criado sob demanda
-_local_client: OpenAI | None = None
-
+# Caminho do socket Unix do Docker Model Runner (Mac-local)
 _DOCKER_SOCKET = (
-    "/Users/nettomello/Library/Containers/com.docker.docker/Data/inference.sock"
+    "/Users/nettomello/Library/Containers/com.docker.docker" "/Data/inference.sock"
 )
 
 
-def _get_local_client() -> OpenAI:
-    global _local_client
-    if _local_client is None:
-        try:
-            import httpx
+# ---------------------------------------------------------------------------
+# Providers
+# ---------------------------------------------------------------------------
 
-            transport = httpx.HTTPTransport(uds=_DOCKER_SOCKET)
+
+@dataclass(frozen=True)
+class _CloudProvider:
+    """Cliente OpenAI cloud reutilizável."""
+
+    api_key: str
+
+    @cached_property
+    def client(self) -> OpenAI:
+        return OpenAI(api_key=self.api_key)
+
+    def complete(self, model: str, **kwargs: Any):
+        return self.client.chat.completions.create(model=model, **kwargs)
+
+
+@dataclass(frozen=True)
+class _LocalProvider:
+    """Cliente local via Docker Model Runner (UDS) com fallback TCP."""
+
+    model: str
+    socket_path: str = _DOCKER_SOCKET
+    base_url: str = LOCAL_MODEL_BASE_URL
+
+    @cached_property
+    def client(self) -> OpenAI:
+        if os.path.exists(self.socket_path):
+            transport = httpx.HTTPTransport(uds=self.socket_path)
             http_client = httpx.Client(transport=transport)
-            _local_client = OpenAI(
+            return OpenAI(
                 base_url="http://localhost/v1",
                 api_key="local",
                 http_client=http_client,
             )
-        except Exception:
-            # Fallback TCP caso o socket não exista (Railway, etc.)
-            _local_client = OpenAI(base_url=LOCAL_MODEL_BASE_URL, api_key="local")
-    return _local_client
+        # Railway / ambientes sem socket exposto
+        return OpenAI(base_url=self.base_url, api_key="local")
+
+    def complete(self, **kwargs: Any):
+        return self.client.chat.completions.create(model=self.model, **kwargs)
 
 
-def _apply_model(kwargs: dict, model: str) -> dict:
-    payload = kwargs.copy()
-    payload["model"] = model
-    return payload
+# ---------------------------------------------------------------------------
+# Cadeia de fallback
+# ---------------------------------------------------------------------------
 
 
-def chat_completions(**kwargs):
-    """Executa chat.completions.create com cadeia de fallback:
-    OpenAI primary → OpenAI fallback → Gemma3 local (Docker Model Runner).
+@dataclass
+class LLMChain:
+    """Orquestra a cadeia de fallback entre providers de LLM."""
+
+    cloud: _CloudProvider
+    local: _LocalProvider | None
+    primary_model: str
+    fallback_model: str | None
+
+    def complete(self, **kwargs: Any):
+        """Executa a chamada LLM percorrendo a cadeia de fallback."""
+        attempts: list[tuple[str, Any]] = []
+
+        # 1. Cloud Primary
+        attempts.append(
+            (
+                f"cloud/{self.primary_model}",
+                lambda: self.cloud.complete(self.primary_model, **kwargs),
+            )
+        )
+
+        # 2. Cloud Fallback
+        if self.fallback_model and self.fallback_model != self.primary_model:
+            attempts.append(
+                (
+                    f"cloud/{self.fallback_model}",
+                    lambda: self.cloud.complete(self.fallback_model, **kwargs),
+                )
+            )
+
+        # 3. Local
+        if self.local is not None:
+            attempts.append(
+                (
+                    f"local/{self.local.model}",
+                    lambda: self.local.complete(**kwargs),
+                )
+            )
+
+        last_exc: Exception | None = None
+        for label, call in attempts:
+            try:
+                return call()
+            except Exception as exc:
+                last_exc = exc
+                notifier.warning(f"[LLMChain] '{label}' falhou: {exc}", "openai_utils")
+
+        raise RuntimeError(
+            f"Todos os providers falharam. Último erro: {last_exc}"
+        ) from last_exc
+
+
+# ---------------------------------------------------------------------------
+# Instância singleton — construída uma única vez no import
+# ---------------------------------------------------------------------------
+
+
+def _build_chain() -> LLMChain:
+    cloud = _CloudProvider(api_key=OPENAI_API_KEY)
+    local = _LocalProvider(model=LOCAL_MODEL_NAME) if LOCAL_MODEL_ENABLED else None
+    return LLMChain(
+        cloud=cloud,
+        local=local,
+        primary_model=OPENAI_MODEL,
+        fallback_model=OPENAI_FALLBACK_MODEL,
+    )
+
+
+_chain: LLMChain = _build_chain()
+
+
+# ---------------------------------------------------------------------------
+# API pública — compatível com o contrato anterior
+# ---------------------------------------------------------------------------
+
+
+def chat_completions(**kwargs: Any):
+    """Executa chat.completions com cadeia de fallback automática.
+
+    Drop-in replacement da função original — aceita os mesmos kwargs
+    que ``openai.chat.completions.create``, exceto ``model`` (gerenciado
+    internamente pela cadeia).
     """
-    primary = OPENAI_MODEL
-    fallback = OPENAI_FALLBACK_MODEL
-
-    # 1. Modelo principal (OpenAI cloud)
-    try:
-        return _client.chat.completions.create(**_apply_model(kwargs, primary))
-    except Exception as primary_exc:
-        notifier.warning(
-            f"OpenAI '{primary}' falhou: {primary_exc}. Tentando fallback '{fallback}'...",
-            "openai_utils",
-        )
-
-    # 2. Fallback OpenAI cloud
-    if fallback and fallback != primary:
-        try:
-            return _client.chat.completions.create(**_apply_model(kwargs, fallback))
-        except Exception as fallback_exc:
-            notifier.warning(
-                f"OpenAI fallback '{fallback}' falhou: {fallback_exc}.",
-                "openai_utils",
-            )
-
-    # 3. Fallback local — Gemma3 via Docker Model Runner
-    if LOCAL_MODEL_ENABLED:
-        notifier.warning(
-            f"Tentando modelo local '{LOCAL_MODEL_NAME}' via Docker Model Runner...",
-            "openai_utils",
-        )
-        try:
-            return _get_local_client().chat.completions.create(
-                **_apply_model(kwargs, LOCAL_MODEL_NAME)
-            )
-        except Exception as local_exc:
-            notifier.error(
-                f"Modelo local '{LOCAL_MODEL_NAME}' também falhou: {local_exc}.",
-                "openai_utils",
-            )
-            raise
-
-    raise RuntimeError("Todos os modelos falharam e LOCAL_MODEL_ENABLED=false.")
+    return _chain.complete(**kwargs)
