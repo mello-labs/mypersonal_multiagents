@@ -636,7 +636,7 @@ def process(
     Returns:
         Resposta final em texto para exibir ao usuário.
     """
-    notifier.separator(f"ORCHESTRATOR")
+    notifier.separator("ORCHESTRATOR")
     persona = get_persona(persona_id)
     persona_label = persona.get("short_name", "default") if persona else "default"
     notifier.agent_event(

@@ -24,8 +24,8 @@ import logging
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
-from core import memory
-from agents import focus_guard
+from core import memory  # noqa: E402
+from agents import focus_guard  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,

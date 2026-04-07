@@ -521,7 +521,7 @@ def cmd_pagar(args_str: str) -> None:
     name = match.group(1).strip()
     due_day = int(match.group(2))
     amount = float(match.group(3).replace(",", "."))
-    result = life_guard.add_finance(name, due_day, amount)
+    life_guard.add_finance(name, due_day, amount)
     notifier.success(
         f"Registrado: {name} — vence dia {due_day} — R$ {amount:.2f}", "life_guard"
     )

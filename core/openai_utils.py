@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
@@ -38,7 +38,7 @@ _DOCKER_SOCKET = (
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class _CloudProvider:
     """Cliente OpenAI cloud reutilizável."""
 
@@ -52,7 +52,7 @@ class _CloudProvider:
         return self.client.chat.completions.create(model=model, **kwargs)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class _LocalProvider:
     """Cliente local via Docker Model Runner (UDS) com fallback TCP."""
 
@@ -82,7 +82,7 @@ class _LocalProvider:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True, kw_only=True, slots=True)
 class LLMChain:
     """Orquestra a cadeia de fallback entre providers de LLM."""
 
