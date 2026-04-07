@@ -1,17 +1,14 @@
 {% extends "base.html" %}
-{% block page_title %}Agenda Navegável{% endblock %}
+{% block page_title %}Agenda{% endblock %}
 {% block content %}
 
-<div class="section-title">Agenda Navegável</div>
+<div class="section-title">Agenda</div>
 
 {% if import_msg is defined %}
 <div class="toast toast-ok">{{ import_msg }}</div>
 {% endif %}
 
 <div class="card">
-  <div class="card-hd">
-    <span class="card-lbl-dim">Intervalo</span>
-  </div>
   <form class="form-row" method="get" action="/agenda">
     <input class="f-date" type="date" name="start_date" value="{{ start_date }}" required />
     <input class="f-date" type="date" name="end_date" value="{{ end_date }}" required />
@@ -21,8 +18,8 @@
     <input type="hidden" name="start_date" value="{{ start_date }}" />
     <input type="hidden" name="end_date" value="{{ end_date }}" />
     <select class="f-select" name="source" required>
-      <option value="notion">Notion (principal)</option>
-      <option value="calendar">Google Calendar (opcional)</option>
+      <option value="notion">Notion</option>
+      <option value="calendar">Google Calendar</option>
     </select>
     <button class="f-btn f-btn-sec" type="submit">Importar</button>
   </form>
@@ -30,29 +27,34 @@
 
 <div class="card">
   <div class="card-hd">
-    <span class="card-lbl">Blocos</span>
+    <span class="card-lbl">Entregas</span>
     <span class="card-lbl-dim">{{ blocks|length }}</span>
   </div>
   {% if blocks %}
     {% for b in blocks %}
     <div class="ls-item">
       <div class="ls-top">
-        <span class="ls-title">{{ b.task_title or 'Sem titulo' }}</span>
+        <span class="ls-title">{{ b.task_title or 'Sem título' }}</span>
         <span class="badge {% if b.completed %}badge-ok{% elif b.rescheduled %}badge-warn{% else %}badge-def{% endif %}">
-          {% if b.completed %}concluido{% elif b.rescheduled %}reagendado{% else %}aberto{% endif %}
+          {% if b.completed %}concluído{% elif b.rescheduled %}reagendado{% else %}aberto{% endif %}
         </span>
       </div>
-      <div class="ls-detail">{{ b.block_date }} &middot; {{ b.time_slot }}</div>
-      <div class="ls-meta">
-        {% if b.created_by %}<span>{{ b.created_by }}</span>{% endif %}
-        {% if b.source_block_id %}<span>origem {{ b.source_block_id }}</span>{% endif %}
-        {% if b.rescheduled_to_block_id %}<span>novo {{ b.rescheduled_to_block_id }}</span>{% endif %}
-        <span>#{{ b.id }}</span>
+      <div class="ls-detail">
+        {%- if b.time_slot -%}
+          {{ b.time_slot }}
+          {%- if b.block_date %} · {{ b.block_date[8:] }}/{{ b.block_date[5:7] }}{% endif %}
+        {%- elif b.block_date -%}
+          {{ b.block_date[8:] }}/{{ b.block_date[5:7] }}/{{ b.block_date[:4] }}
+        {%- else -%}—
+        {%- endif -%}
       </div>
     </div>
     {% endfor %}
   {% else %}
-    <div class="empty">Sem blocos neste intervalo</div>
+    <div class="empty">
+      <div class="empty-msg">Nenhuma entrega neste período</div>
+      <span class="empty-cta" style="cursor:default">Ajuste o intervalo ou importe do Notion</span>
+    </div>
   {% endif %}
 </div>
 
