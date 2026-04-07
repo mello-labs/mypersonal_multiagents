@@ -1232,6 +1232,44 @@
       .htmx-request .sync-lbl {
         display: none;
       }
+
+      /* ══ Sync button states ══ */
+      .sync-btn {
+        position: relative;
+        transition: color 0.15s, opacity 0.15s;
+      }
+      .sync-btn.htmx-request {
+        opacity: 0.55;
+        cursor: wait;
+      }
+      .sync-btn .sync-lbl {
+        transition: opacity 0.15s;
+      }
+      .sync-btn.htmx-request .sync-lbl {
+        display: none;
+      }
+      .sync-btn .sync-ico {
+        display: inline-block;
+      }
+      .sync-btn.htmx-request .sync-ico {
+        display: none;
+      }
+      .sync-dots {
+        display: none;
+        letter-spacing: 2px;
+        animation: pulse 0.7s ease-in-out infinite;
+      }
+      .sync-btn.htmx-request .sync-dots {
+        display: inline;
+      }
+
+      /* ══ Sync result fade ══ */
+      #sync-result {
+        transition: opacity 0.6s;
+      }
+      #sync-result.fade-out {
+        opacity: 0;
+      }
       input:disabled,
       button:disabled {
         opacity: 0.4;
