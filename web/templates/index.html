@@ -1,10 +1,14 @@
-{% extends "base.html" %} {% block page_title %} >_ nodE NEØ - Agents Gate {%
-endblock %} {% block content %} {% set t = summary.tasks %} {% set f =
-summary.focus %} {% set a = summary.agenda_today %} {% set al = summary.alerts
-%} {% set tv = task_overview %} {# ── Greeting ── #}
-<div class="section-title" id="greeting"></div>
+{% extends "base.html" %}
+{% block page_title %}NEØ{% endblock %}
+{% block content %}
+{% set f = summary.focus %}
+{% set a = summary.agenda_today %}
+{% set tv = task_overview %}
 
-{# ── Metrics ── #}
+{# ── Contexto do dia (micro-greeting) ── #}
+<div class="day-ctx" id="day-ctx"></div>
+
+{# ── Métricas ── #}
 <div
   id="stats-row"
   class="metrics"
@@ -17,60 +21,59 @@ summary.focus %} {% set a = summary.agenda_today %} {% set al = summary.alerts
     <div class="metric-val v-blue">{{ tv.pending_count }}</div>
     <div class="metric-sub">
       {{ tv.overdue_count }} atrasada{{ 's' if tv.overdue_count != 1 else '' }}
-      &middot; {{ tv.in_progress_count }} em prog
+      &middot; {{ tv.in_progress_count }} em andamento
     </div>
   </div>
-  <div class="metric m-green">
-    <div class="metric-lbl">Agenda</div>
-    <div class="metric-val v-green">
+
+  <div class="metric
+    {%- if a.total_blocks == 0 %} m-dim
+    {%- elif a.completed == a.total_blocks %} m-green
+    {%- else %} m-blue
+    {%- endif %}">
+    <div class="metric-lbl">Hoje</div>
+    <div class="metric-val
+      {%- if a.total_blocks == 0 %} v-dim
+      {%- elif a.completed == a.total_blocks %} v-green
+      {%- else %} v-blue
+      {%- endif %}">
       {{ a.completed }}<span class="v-frac">/{{ a.total_blocks }}</span>
     </div>
-    <div class="metric-sub">blocos hoje</div>
-  </div>
-  <div class="metric {% if f.guard_running and a.total_blocks > 0 %}m-green{% elif f.guard_running %}m-yell{% else %}m-dim{% endif %}">
-    <div class="metric-lbl">Foco</div>
-    <div class="metric-val v-text {% if f.guard_running and a.total_blocks > 0 %}v-green{% elif f.guard_running %}v-yell{% else %}v-dim{% endif %}">
-      {% if f.guard_running %}Ativo{% else %}Off{% endif %}
-    </div>
     <div class="metric-sub">
-      {% if not f.guard_running %}desligado
-      {% elif a.total_blocks == 0 %}sem agenda hoje
-      {% elif f.on_track %}on track
-      {% else %}desvio detectado
-      {% endif %}
+      {%- if a.total_blocks == 0 %}sem agenda
+      {%- elif a.completed == a.total_blocks %}tudo entregue
+      {%- else %}{{ a.total_blocks - a.completed }} restante{{ 's' if (a.total_blocks - a.completed) != 1 else '' }}
+      {%- endif %}
     </div>
-  </div>
-  <div class="metric {% if al.pending > 0 %}m-red{% else %}m-dim{% endif %}">
-    <div class="metric-lbl">Alertas</div>
-    <div
-      class="metric-val {% if al.pending > 0 %}v-red{% else %}v-dim{% endif %}"
-    >
-      {{ al.pending }}
-    </div>
-    <div class="metric-sub">pendente{{ 's' if al.pending != 1 else '' }}</div>
   </div>
 </div>
 
-{% if sync_msg is defined %}
-<div class="toast toast-ok">{{ sync_msg }}</div>
-{% endif %} {# ── Agenda hoje ── #}
+{# ── Agenda hoje ── #}
 <div class="card">
   <div class="card-hd">
     <span class="card-lbl">Agenda hoje</span>
-    <button
-      class="card-act"
-      hx-get="/agenda"
-      hx-target="#agenda-body"
-      hx-swap="innerHTML"
-      aria-label="Atualizar"
-    >
-      Atualizar
-    </button>
+    <div style="display:flex;gap:12px;align-items:center">
+      <button
+        class="card-act"
+        style="color:var(--t3);font-size:12px"
+        hx-post="/sync"
+        hx-target="#sync-result"
+        hx-swap="innerHTML"
+        hx-disabled-elt="this"
+        title="Sincronizar com Notion"
+      >↻ Sync</button>
+      <button
+        class="card-act"
+        hx-get="/agenda"
+        hx-target="#agenda-body"
+        hx-swap="innerHTML"
+      >Atualizar</button>
+    </div>
   </div>
+  <div id="sync-result" style="font-size:11px;color:var(--t3);padding:0 16px 4px;min-height:0"></div>
   <div
     id="agenda-body"
     hx-get="/agenda"
-    hx-trigger="every 20s"
+    hx-trigger="every 30s"
     hx-swap="innerHTML"
   >
     {% include "partials/agenda.html" %}
@@ -86,7 +89,7 @@ summary.focus %} {% set a = summary.agenda_today %} {% set al = summary.alerts
   <div
     id="tasks-body"
     hx-get="/tasks"
-    hx-trigger="every 20s"
+    hx-trigger="every 30s"
     hx-swap="innerHTML"
   >
     {% include "partials/tasks.html" %}
@@ -95,12 +98,14 @@ summary.focus %} {% set a = summary.agenda_today %} {% set al = summary.alerts
 
 <script>
   !(function () {
-    var h = new Date().getHours(),
-      g = "Boa noite";
-    if (h >= 5 && h < 12) g = "Bom dia";
-    else if (h >= 12 && h < 18) g = "Boa tarde";
-    var el = document.getElementById("greeting");
-    if (el) el.textContent = g;
+    var now = new Date();
+    var h = now.getHours();
+    var days = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+    var months = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    var greeting = h >= 5 && h < 12 ? 'bom dia' : h >= 12 && h < 18 ? 'boa tarde' : 'boa noite';
+    var label = days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()] + ' · ' + greeting;
+    var el = document.getElementById('day-ctx');
+    if (el) el.textContent = label;
   })();
 </script>
 

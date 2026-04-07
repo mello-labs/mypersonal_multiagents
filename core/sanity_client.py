@@ -8,9 +8,15 @@ Fallback para valores hardcoded se Sanity estiver indisponível ou não configur
 
 import os
 import time
+from pathlib import Path
 from typing import Any, Optional
 
 import requests
+from dotenv import load_dotenv
+
+# Garante que o .env da raiz do projeto está carregado
+# (sanity_client pode ser importado antes de config.py em alguns contextos)
+load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 SANITY_PROJECT_ID: str = os.getenv("SANITY_PROJECT_ID", "")
 SANITY_DATASET: str = os.getenv("SANITY_DATASET", "production")

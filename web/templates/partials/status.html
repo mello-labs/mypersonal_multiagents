@@ -1,6 +1,6 @@
-{% set t = summary.tasks %} {% set f = summary.focus %} {% set a =
-summary.agenda_today %} {% set al = summary.alerts %} {% set tv = task_overview
-%}
+{% set f = summary.focus %}
+{% set a = summary.agenda_today %}
+{% set tv = task_overview %}
 
 <div
   id="stats-row"
@@ -14,37 +14,28 @@ summary.agenda_today %} {% set al = summary.alerts %} {% set tv = task_overview
     <div class="metric-val v-blue">{{ tv.pending_count }}</div>
     <div class="metric-sub">
       {{ tv.overdue_count }} atrasada{{ 's' if tv.overdue_count != 1 else '' }}
-      &middot; {{ tv.in_progress_count }} em prog
+      &middot; {{ tv.in_progress_count }} em andamento
     </div>
   </div>
 
-  <div class="metric m-green">
-    <div class="metric-lbl">Agenda</div>
-    <div class="metric-val v-green">
+  <div class="metric
+    {%- if a.total_blocks == 0 %} m-dim
+    {%- elif a.completed == a.total_blocks %} m-green
+    {%- else %} m-blue
+    {%- endif %}">
+    <div class="metric-lbl">Hoje</div>
+    <div class="metric-val
+      {%- if a.total_blocks == 0 %} v-dim
+      {%- elif a.completed == a.total_blocks %} v-green
+      {%- else %} v-blue
+      {%- endif %}">
       {{ a.completed }}<span class="v-frac">/{{ a.total_blocks }}</span>
     </div>
-    <div class="metric-sub">blocos hoje</div>
-  </div>
-
-  <div class="metric {% if f.guard_running %}m-green{% else %}m-dim{% endif %}">
-    <div class="metric-lbl">Foco</div>
-    <div
-      class="metric-val v-text {% if f.guard_running %}v-green{% else %}v-dim{% endif %}"
-    >
-      {% if f.guard_running %}Ativo{% else %}Off{% endif %}
-    </div>
     <div class="metric-sub">
-      {% if f.on_track %}on track{% else %}desvio detectado{% endif %}
+      {%- if a.total_blocks == 0 %}sem agenda
+      {%- elif a.completed == a.total_blocks %}tudo entregue
+      {%- else %}{{ a.total_blocks - a.completed }} restante{{ 's' if (a.total_blocks - a.completed) != 1 else '' }}
+      {%- endif %}
     </div>
-  </div>
-
-  <div class="metric {% if al.pending > 0 %}m-red{% else %}m-dim{% endif %}">
-    <div class="metric-lbl">Alertas</div>
-    <div
-      class="metric-val {% if al.pending > 0 %}v-red{% else %}v-dim{% endif %}"
-    >
-      {{ al.pending }}
-    </div>
-    <div class="metric-sub">pendente{{ 's' if al.pending != 1 else '' }}</div>
   </div>
 </div>

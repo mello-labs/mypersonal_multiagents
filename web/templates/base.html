@@ -157,10 +157,11 @@
       }
       .hdr-title {
         flex: 1;
-        font-size: 17px;
-        font-weight: 800;
-        letter-spacing: -0.2px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
+        color: var(--t2);
       }
       .hdr-right {
         display: flex;
@@ -1113,6 +1114,39 @@
         }
       }
 
+      /* ══ Guard dot (header status) ══ */
+      .guard-dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 7px var(--green);
+        flex-shrink: 0;
+        cursor: default;
+        transition: background 0.4s, box-shadow 0.4s;
+      }
+      .guard-dot.off {
+        background: rgba(255, 255, 255, 0.1);
+        box-shadow: none;
+      }
+      .guard-dot.idle {
+        background: var(--yell);
+        box-shadow: 0 0 6px rgba(255, 184, 0, 0.4);
+      }
+      .guard-dot.warn {
+        background: var(--red);
+        box-shadow: 0 0 7px rgba(255, 75, 92, 0.4);
+      }
+
+      /* ══ Day context (home micro-greeting) ══ */
+      .day-ctx {
+        font-size: 12px;
+        color: var(--t3);
+        padding: 0 2px 10px;
+        letter-spacing: 0.02em;
+      }
+
       /* ══ Persona selector ══ */
       .persona-wrap {
         position: relative;
@@ -1178,6 +1212,15 @@
         transform: translateX(-50%) translateY(0);
       }
 
+      /* ══ Persona: visível só no chat ══ */
+      .dashboard-page .persona-wrap,
+      .tasks-page .persona-wrap,
+      .agenda-page .persona-wrap,
+      .audit-page .persona-wrap,
+      .ecosystem-page .persona-wrap {
+        display: none;
+      }
+
       /* ══ HTMX ══ */
       .htmx-indicator {
         opacity: 0;
@@ -1233,7 +1276,7 @@
     <div class="shell">
       <header class="hdr">
         <div class="hdr-title">
-          {% block page_title %} >_ nodE NEØ - Agents Gate {% endblock %}
+          {% block page_title %}NEØ{% endblock %}
         </div>
         <div class="hdr-right">
           <div class="persona-wrap" id="persona-selector">
@@ -1262,34 +1305,16 @@
                 {{ p.icon }} {{ p.short_name }}
               </option>
               {% endfor %} {% else %}
-              <option value="coordinator" selected>🎯 Coord</option>
+              <option value="neo" selected>⬡ NEØ</option>
               {% endif %}
             </select>
           </div>
-          <span class="hdr-clock" id="clk"></span>
-          <div class="pill">
-            <span class="pill-dot
-              {%- if not summary or not summary.focus.guard_running %} off
-              {%- elif summary.agenda_today.total_blocks == 0 %} idle
-              {%- endif %}"></span>
-            Guard
-          </div>
-          <button
-            class="hdr-btn"
-            hx-post="/sync"
-            hx-target="#toast-area"
-            hx-swap="innerHTML"
-            hx-indicator="#sync-sp"
-            hx-disabled-elt="this"
-          >
-            <span
-              id="sync-sp"
-              class="htmx-indicator spin"
-              style="font-size: 11px"
-              >&#8635;</span
-            >
-            <span class="sync-lbl">Sync</span>
-          </button>
+          <span class="guard-dot
+            {%- if not summary is defined or not summary or not summary.focus.guard_running %} off
+            {%- elif not summary.focus.on_track %} warn
+            {%- elif summary.agenda_today.total_blocks == 0 %} idle
+            {%- endif %}"
+            title="Focus Guard{% if not summary is defined or not summary or not summary.focus.guard_running %}: desligado{% elif not summary.focus.on_track %}: desvio detectado{% elif summary.agenda_today.total_blocks == 0 %}: sem agenda{% else %}: ativo{% endif %}"></span>
         </div>
       </header>
 
@@ -1388,17 +1413,6 @@
 
     <script>
       !(function () {
-        function clk() {
-          var e = document.getElementById("clk");
-          if (e)
-            e.textContent = new Date().toLocaleTimeString("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-        }
-        clk();
-        setInterval(clk, 10000);
-
         var _t;
         function showErr(m) {
           var t = document.getElementById("err-toast");
