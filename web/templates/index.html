@@ -27,15 +27,17 @@ summary.focus %} {% set a = summary.agenda_today %} {% set al = summary.alerts
     </div>
     <div class="metric-sub">blocos hoje</div>
   </div>
-  <div class="metric {% if f.guard_running %}m-green{% else %}m-dim{% endif %}">
+  <div class="metric {% if f.guard_running and a.total_blocks > 0 %}m-green{% elif f.guard_running %}m-yell{% else %}m-dim{% endif %}">
     <div class="metric-lbl">Foco</div>
-    <div
-      class="metric-val v-text {% if f.guard_running %}v-green{% else %}v-dim{% endif %}"
-    >
+    <div class="metric-val v-text {% if f.guard_running and a.total_blocks > 0 %}v-green{% elif f.guard_running %}v-yell{% else %}v-dim{% endif %}">
       {% if f.guard_running %}Ativo{% else %}Off{% endif %}
     </div>
     <div class="metric-sub">
-      {% if f.on_track %}on track{% else %}desvio detectado{% endif %}
+      {% if not f.guard_running %}desligado
+      {% elif a.total_blocks == 0 %}sem agenda hoje
+      {% elif f.on_track %}on track
+      {% else %}desvio detectado
+      {% endif %}
     </div>
   </div>
   <div class="metric {% if al.pending > 0 %}m-red{% else %}m-dim{% endif %}">

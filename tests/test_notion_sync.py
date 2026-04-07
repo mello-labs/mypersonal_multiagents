@@ -110,6 +110,87 @@ class TestFetchNotionTasks:
         assert tasks[0]["scheduled_time"] == "09:00"
         assert tasks[0]["notion_page_id"] == "page-id-abc"
 
+    def test_fetch_parseia_horario_previsto_como_date_com_hora(self):
+        """Notion devolve 'Horário previsto' como property date com datetime ISO."""
+        from agents.notion_sync import fetch_notion_tasks
+
+        notion_response = {
+            "results": [
+                {
+                    "id": "page-date-1",
+                    "properties": {
+                        "Nome": {"title": [{"plain_text": "Tarefa com data"}]},
+                        "Status": {"select": {"name": "A fazer"}},
+                        "Prioridade": {"select": {"name": "Alta"}},
+                        "Horário previsto": {
+                            "type": "date",
+                            "date": {"start": "2026-04-07T14:30:00.000-03:00"},
+                        },
+                        "Horário real": {"type": "rich_text", "rich_text": []},
+                    },
+                }
+            ]
+        }
+
+        ok = _mock_response(200, notion_response)
+        with patch("requests.request", return_value=ok):
+            tasks = fetch_notion_tasks()
+
+        assert tasks[0]["scheduled_time"] == "2026-04-07 14:30"
+
+    def test_fetch_parseia_horario_previsto_como_date_sem_hora(self):
+        """Notion devolve 'Horário previsto' como date sem hora (só dia)."""
+        from agents.notion_sync import fetch_notion_tasks
+
+        notion_response = {
+            "results": [
+                {
+                    "id": "page-date-2",
+                    "properties": {
+                        "Nome": {"title": [{"plain_text": "Só data"}]},
+                        "Status": {"select": {"name": "A fazer"}},
+                        "Prioridade": {"select": {"name": "Média"}},
+                        "Horário previsto": {
+                            "type": "date",
+                            "date": {"start": "2026-04-07"},
+                        },
+                        "Horário real": {"type": "rich_text", "rich_text": []},
+                    },
+                }
+            ]
+        }
+
+        ok = _mock_response(200, notion_response)
+        with patch("requests.request", return_value=ok):
+            tasks = fetch_notion_tasks()
+
+        assert tasks[0]["scheduled_time"] == "2026-04-07"
+
+    def test_fetch_date_vazio_retorna_string_vazia(self):
+        """Property 'date' existe mas com valor None não deve explodir."""
+        from agents.notion_sync import fetch_notion_tasks
+
+        notion_response = {
+            "results": [
+                {
+                    "id": "page-date-3",
+                    "properties": {
+                        "Nome": {"title": [{"plain_text": "Sem horário"}]},
+                        "Status": {"select": {"name": "A fazer"}},
+                        "Prioridade": {"select": {"name": "Baixa"}},
+                        "Horário previsto": {"type": "date", "date": None},
+                        "Horário real": {"type": "rich_text", "rich_text": []},
+                    },
+                }
+            ]
+        }
+
+        ok = _mock_response(200, notion_response)
+        with patch("requests.request", return_value=ok):
+            tasks = fetch_notion_tasks()
+
+        assert tasks[0]["scheduled_time"] == ""
+
 
 # =============================================================================
 # create_notion_task — payload enviado
@@ -152,6 +233,67 @@ class TestCreateNotionTask:
             page_id = notion_sync.create_notion_task("Tarefa sem token")
 
         assert page_id == ""
+
+    def test_create_task_envia_horario_previsto_como_date(self):
+        """'Horário previsto' deve ser enviado como property date, não rich_text."""
+        from agents import notion_sync
+
+        ok = _mock_response(200, {"id": "new-page-date"})
+        with patch("requests.request", return_value=ok) as mock_req:
+            notion_sync.create_notion_task(
+                title="Com horário",
+                scheduled_time="2026-04-07 14:30",
+            )
+
+        payload = mock_req.call_args[1]["json"]
+        hp = payload["properties"]["Horário previsto"]
+        assert "date" in hp, "deve ser property do tipo date, não rich_text"
+        assert hp["date"]["start"].startswith("2026-04-07T14:30")
+
+    def test_create_task_aceita_hhmm_puro_como_hoje(self):
+        """Passar só 'HH:MM' deve virar data de hoje + hora."""
+        from datetime import date
+
+        from agents import notion_sync
+
+        ok = _mock_response(200, {"id": "new-page-hhmm"})
+        with patch("requests.request", return_value=ok) as mock_req:
+            notion_sync.create_notion_task(
+                title="Só hora",
+                scheduled_time="09:00",
+            )
+
+        payload = mock_req.call_args[1]["json"]
+        hp = payload["properties"]["Horário previsto"]
+        assert hp["date"]["start"].startswith(f"{date.today().isoformat()}T09:00")
+
+
+class TestNormalizeTimeSlot:
+    def test_hhmm_puro(self):
+        from agents.notion_sync import _normalize_time_slot
+
+        assert _normalize_time_slot("09:00") == "09:00-10:00"
+
+    def test_hhmm_range(self):
+        from agents.notion_sync import _normalize_time_slot
+
+        assert _normalize_time_slot("09:00-10:30") == "09:00-10:30"
+
+    def test_datetime_completo_nao_confunde_com_dash_da_data(self):
+        """'2026-04-07 09:00' não pode virar '2026-04' quebrado."""
+        from agents.notion_sync import _normalize_time_slot
+
+        assert _normalize_time_slot("2026-04-07 09:00") == "09:00-10:00"
+
+    def test_iso_datetime(self):
+        from agents.notion_sync import _normalize_time_slot
+
+        assert _normalize_time_slot("2026-04-07T09:00:00") == "09:00-10:00"
+
+    def test_string_sem_horario_retorna_original(self):
+        from agents.notion_sync import _normalize_time_slot
+
+        assert _normalize_time_slot("manhã") == "manhã"
 
 
 class TestAgendaSync:
@@ -206,6 +348,85 @@ class TestAgendaSync:
         assert blocos[0]["task_title"] == "Planejamento"
         assert blocos[0]["task_id"] == 7
         assert blocos[0]["notion_page_id"] == "page-123"
+        assert blocos[0]["time_slot"] == "09:00-10:00"
+
+    def test_maybe_create_agenda_block_respeita_data_futura(self, mem):
+        """Tarefa com data+hora futura deve criar bloco NA DATA REAL, não hoje."""
+        from agents import notion_sync
+
+        notion_sync._maybe_create_agenda_block(
+            8,
+            {
+                "title": "Reunião amanhã",
+                "status": "A fazer",
+                "scheduled_time": "2026-04-08 14:00",
+                "notion_page_id": "page-fut",
+            },
+        )
+
+        # Não deve criar nada hoje
+        blocos_hoje = mem.get_today_agenda()
+        assert all(b.get("task_id") != 8 for b in blocos_hoje)
+
+        # Deve criar bloco na data alvo
+        blocos_amanha = mem.get_agenda_for_date("2026-04-08")
+        assert len(blocos_amanha) == 1
+        assert blocos_amanha[0]["task_id"] == 8
+        assert blocos_amanha[0]["time_slot"] == "14:00-15:00"
+        assert blocos_amanha[0]["block_date"] == "2026-04-08"
+
+    def test_maybe_create_agenda_block_pula_quando_so_data(self, mem):
+        """Tarefa com APENAS data (sem hora) NÃO deve criar bloco automático."""
+        from agents import notion_sync
+
+        notion_sync._maybe_create_agenda_block(
+            9,
+            {
+                "title": "Coisa pra fazer",
+                "status": "A fazer",
+                "scheduled_time": "2026-04-08",
+                "notion_page_id": "page-no-hour",
+            },
+        )
+
+        # Nenhum bloco deve nascer — nem hoje, nem na data
+        assert mem.get_today_agenda() == []
+        assert mem.get_agenda_for_date("2026-04-08") == []
+
+    def test_maybe_create_agenda_block_aceita_iso_datetime(self, mem):
+        """ISO datetime do Notion (com timezone) também deve funcionar."""
+        from agents import notion_sync
+
+        notion_sync._maybe_create_agenda_block(
+            10,
+            {
+                "title": "Sprint planning",
+                "status": "A fazer",
+                "scheduled_time": "2026-04-08 09:30",
+                "notion_page_id": "page-iso",
+            },
+        )
+
+        blocos = mem.get_agenda_for_date("2026-04-08")
+        assert len(blocos) == 1
+        assert blocos[0]["time_slot"] == "09:30-10:30"
+        assert blocos[0]["task_id"] == 10
+
+    def test_maybe_create_agenda_block_nao_duplica_em_data_futura(self, mem):
+        """Rodar duas vezes não deve criar bloco duplicado."""
+        from agents import notion_sync
+
+        payload = {
+            "title": "X",
+            "status": "A fazer",
+            "scheduled_time": "2026-04-08 10:00",
+            "notion_page_id": "page-dup",
+        }
+        notion_sync._maybe_create_agenda_block(11, payload)
+        notion_sync._maybe_create_agenda_block(11, payload)
+
+        blocos = mem.get_agenda_for_date("2026-04-08")
+        assert len(blocos) == 1
 
     def test_sync_agenda_range_to_local_importa_blocos(self, mem):
         from agents import notion_sync

@@ -6,7 +6,7 @@
       <span class="badge {{ t.display_status_class or 'badge-def' }}">{{ t.display_status or t.status }}</span>
     </div>
     {% if t.display_meta %}
-    <div class="tsk-meta">{{ t.display_meta }}</div>
+    <div class="tsk-meta{% if t.display_meta_is_date %} tsk-meta-date{% endif %}">{{ t.display_meta }}</div>
     {% endif %}
   </div>
   {% if t.status != 'Concluído' %}

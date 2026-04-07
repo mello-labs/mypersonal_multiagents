@@ -194,8 +194,12 @@
         box-shadow: 0 0 8px var(--green);
       }
       .pill-dot.off {
-        background: var(--orange);
-        box-shadow: 0 0 6px rgba(255, 138, 0, 0.45);
+        background: var(--t3);
+        box-shadow: none;
+      }
+      .pill-dot.idle {
+        background: var(--yell);
+        box-shadow: 0 0 6px rgba(255, 184, 0, 0.45);
       }
       .hdr-btn {
         background: rgba(255, 255, 255, 0.03);
@@ -461,6 +465,14 @@
           transparent
         );
       }
+      .metric.m-yell::before {
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--yell),
+          transparent
+        );
+      }
       .metric.m-dim::before {
         background: linear-gradient(90deg, transparent, var(--s5), transparent);
       }
@@ -536,6 +548,10 @@
         min-width: 82px;
         flex-shrink: 0;
         font-variant-numeric: tabular-nums;
+      }
+      /* Date-only blocks: data mais curta, sem slot de hora */
+      .blk-time-date:not(:empty) {
+        min-width: 40px;
       }
       .blk-name {
         flex: 1;
@@ -1026,12 +1042,50 @@
         padding: 6px 2px 12px;
       }
 
+      /* ══ Task meta variant: scheduled date ══ */
+      .tsk-meta-date {
+        color: var(--acqua);
+        opacity: 0.75;
+        font-family: var(--mono);
+        font-size: 10.5px;
+        letter-spacing: 0.02em;
+      }
+
       /* ══ Empty ══ */
       .empty {
-        padding: 28px 16px;
+        padding: 24px 16px 20px;
         text-align: center;
         color: var(--t3);
         font-size: 14px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+      .empty-msg {
+        color: var(--t3);
+        font-size: 13px;
+      }
+      .empty-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(55, 184, 255, 0.08);
+        border: 1px solid rgba(55, 184, 255, 0.22);
+        color: var(--acqua);
+        border-radius: 100px;
+        padding: 7px 16px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: var(--font);
+        cursor: pointer;
+        letter-spacing: 0.02em;
+        -webkit-tap-highlight-color: transparent;
+        transition: all 0.15s;
+      }
+      .empty-cta:active {
+        background: rgba(55, 184, 255, 0.16);
+        transform: scale(0.96);
       }
 
       /* ══ Loading ══ */
@@ -1214,9 +1268,10 @@
           </div>
           <span class="hdr-clock" id="clk"></span>
           <div class="pill">
-            <span
-              class="pill-dot{% if not summary or not summary.focus.guard_running %} off{% endif %}"
-            ></span>
+            <span class="pill-dot
+              {%- if not summary or not summary.focus.guard_running %} off
+              {%- elif summary.agenda_today.total_blocks == 0 %} idle
+              {%- endif %}"></span>
             Guard
           </div>
           <button

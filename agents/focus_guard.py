@@ -139,6 +139,7 @@ def analyze_progress() -> dict:
     for block in today_blocks:
         slot = block.get("time_slot", "")
         if "-" in slot:
+            # Bloco com horário definido — lógica temporal exata
             try:
                 start_str = slot.split("-")[0].strip()
                 end_str = slot.split("-")[1].strip()
@@ -155,6 +156,10 @@ def analyze_progress() -> dict:
                     upcoming_blocks.append(block)
             except ValueError:
                 pass
+        else:
+            # Bloco date-only (sem horário) — pendente enquanto não concluído
+            if not block.get("completed"):
+                upcoming_blocks.append(block)
 
     load = {
         "total": len(today_blocks),

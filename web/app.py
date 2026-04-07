@@ -133,17 +133,87 @@ def _parse_slot_range(block_date: str | None, time_slot: str | None):
 def _format_slot_label(
     block_date: str | None, time_slot: str | None, today: date
 ) -> str:
-    if not time_slot:
-        return ""
-    if not block_date:
-        return time_slot
-    if block_date == today.isoformat():
-        return f"Hoje · {time_slot}"
+    """Formata label de um bloco de agenda para exibição nas listas de tarefas."""
+    tomorrow = today + timedelta(days=1)
+
     try:
-        block_day = datetime.strptime(block_date, "%Y-%m-%d").date()
-        return f"{block_day.strftime('%d/%m')} · {time_slot}"
+        block_day = datetime.strptime(block_date, "%Y-%m-%d").date() if block_date else None
     except ValueError:
-        return time_slot
+        block_day = None
+
+    if block_day:
+        if block_day == today:
+            day_label = "Hoje"
+        elif block_day == tomorrow:
+            day_label = "Amanhã"
+        elif block_day < today:
+            day_label = f"{block_day.strftime('%d/%m')} (vencida)"
+        else:
+            day_label = block_day.strftime("%d/%m")
+    else:
+        day_label = ""
+
+    if time_slot:
+        return f"{day_label} · {time_slot}" if day_label else time_slot
+
+    # Bloco date-only (sem horário)
+    return day_label if day_label else ""
+
+
+def _format_scheduled_time(scheduled_time: str | None, today: date) -> str:
+    """
+    Formata scheduled_time de forma legível para o front.
+    Exemplos:
+      "2026-04-07 14:00" → "Hoje · 14:00"
+      "2026-04-08"       → "Para amanhã"
+      "2026-04-10"       → "Para 10/04"
+      "09:00"            → "Hoje · 09:00"
+    Retorna "" se vazio.
+    """
+    import re as _re
+
+    raw = (scheduled_time or "").strip()
+    if not raw:
+        return ""
+
+    _HHMM = _re.compile(r"(\d{1,2}):(\d{2})")
+    date_match = _re.search(r"(\d{4})-(\d{2})-(\d{2})", raw)
+    hhmm_match = _HHMM.search(raw)
+
+    block_date = None
+    if date_match:
+        try:
+            block_date = datetime.strptime(date_match.group(0), "%Y-%m-%d").date()
+        except ValueError:
+            pass
+
+    hhmm_str = ""
+    if hhmm_match:
+        h, m = hhmm_match.groups()
+        try:
+            hhmm_str = f"{int(h):02d}:{m}"
+        except ValueError:
+            pass
+
+    if block_date:
+        tomorrow = today + timedelta(days=1)
+        if block_date == today:
+            day_label = "Hoje"
+        elif block_date == tomorrow:
+            day_label = "Amanhã"
+        elif block_date < today:
+            day_label = f"{block_date.strftime('%d/%m')} (vencida)"
+        else:
+            day_label = block_date.strftime("%d/%m")
+
+        if hhmm_str:
+            return f"{day_label} · {hhmm_str}"
+        return f"Para {day_label}"
+
+    if hhmm_str:
+        return f"Hoje · {hhmm_str}"
+
+    return raw
 
 
 def _build_task_views(include_completed: bool = True) -> tuple[list[dict], dict]:
@@ -220,7 +290,10 @@ def _build_task_views(include_completed: bool = True) -> tuple[list[dict], dict]
                     today,
                 )
                 if next_block
-                else (task.get("scheduled_time") or "Sem bloco associado")
+                else (
+                    _format_scheduled_time(task.get("scheduled_time"), today)
+                    or "Sem bloco associado"
+                )
             )
         else:
             display_status = "A fazer"
@@ -232,14 +305,27 @@ def _build_task_views(include_completed: bool = True) -> tuple[list[dict], dict]
                     today,
                 )
                 if next_block
-                else (task.get("scheduled_time") or "Sem horário definido")
+                else (
+                    _format_scheduled_time(task.get("scheduled_time"), today)
+                    or "Sem horário definido"
+                )
             )
 
+        # True quando a meta é um horário/data agendado (azul),
+        # False quando é um aviso operacional (branco/laranja)
+        meta_is_schedule = (
+            not overdue_block
+            and original_status not in ("Concluído",)
+            and bool(meta)
+            and not meta.startswith("Bloco vencido")
+            and not meta.startswith("Sem")
+        )
         view.update(
             {
                 "display_status": display_status,
                 "display_status_class": status_class,
                 "display_meta": meta,
+                "display_meta_is_date": meta_is_schedule,
                 "is_overdue": bool(overdue_block),
             }
         )

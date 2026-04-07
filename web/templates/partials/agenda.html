@@ -3,5 +3,8 @@
   {% include "partials/block_row.html" %}
   {% endfor %}
 {% else %}
-  <div class="empty">Sem blocos hoje</div>
+  <div class="empty">
+    <div class="empty-msg">Sem blocos hoje</div>
+    <a class="empty-cta" href="/agenda">Abrir Agenda para importar →</a>
+  </div>
 {% endif %}

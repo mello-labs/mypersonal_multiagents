@@ -19,6 +19,7 @@
 #     - Concluído     (checkbox)
 
 import os
+import re
 import sys
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
@@ -43,6 +44,24 @@ from config import (
 from core import memory, notifier
 
 AGENT_NAME = "notion_sync"
+
+# ---------------------------------------------------------------------------
+# Nomes das colunas nos databases do Notion
+# (altere aqui se renomear no Notion)
+# ---------------------------------------------------------------------------
+
+# DB "Tarefas"
+_TASK_NAME_FIELD = "Nome"
+_TASK_STATUS_FIELD = "Status"
+_TASK_PRIORITY_FIELD = "Prioridade"
+_TASK_SCHEDULED_FIELD = "Horário previsto"   # tipo: date
+_TASK_ACTUAL_FIELD = "Horário real"           # tipo: rich_text
+
+# DB "Agenda" (antigo "Agenda Diária")
+_AGENDA_NAME_FIELD = "Name"            # título da página (title)
+_AGENDA_DATE_FIELD = "Data de entrega" # data de entrega (date)
+_AGENDA_RELATION_FIELD = "Tarefa vinculada"  # relation → Tarefas
+_AGENDA_DONE_FIELD = "Concluído"       # checkbox
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +168,9 @@ def create_notion_task(
         "Prioridade": _prop_select(priority),
     }
     if scheduled_time:
-        properties["Horário previsto"] = _prop_rich_text(scheduled_time)
+        date_prop = _prop_scheduled_time(scheduled_time)
+        if date_prop is not None:
+            properties["Horário previsto"] = date_prop
     if actual_time:
         properties["Horário real"] = _prop_rich_text(actual_time)
 
@@ -213,7 +234,7 @@ def fetch_notion_tasks(filter_status: Optional[str] = None) -> list[dict]:
             "title": _extract_title(props.get("Nome")),
             "status": _extract_select(props.get("Status")),
             "priority": _extract_select(props.get("Prioridade")),
-            "scheduled_time": _extract_rich_text(props.get("Horário previsto")),
+            "scheduled_time": _extract_scheduled_time(props.get("Horário previsto")),
             "actual_time": _extract_rich_text(props.get("Horário real")),
         }
         tasks.append(task)
@@ -229,13 +250,17 @@ def fetch_notion_tasks(filter_status: Optional[str] = None) -> list[dict]:
 
 def create_notion_agenda_block(
     block_date: str,
-    time_slot: str,
     task_title: str,
     notion_task_page_id: Optional[str] = None,
     completed: bool = False,
+    time_slot: str = "",  # mantido por retrocompat, não enviado ao Notion
 ) -> str:
     """
-    Cria um bloco na Agenda Diária do Notion.
+    Cria um bloco no DB de Agenda do Notion usando o schema atual:
+      - Name            (title)  — nome do bloco
+      - Data de entrega (date)   — data alvo
+      - Tarefa vinculada(relation)
+      - Concluído       (checkbox)
     Retorna o ID da página criada.
     """
     if not NOTION_TOKEN or not NOTION_AGENDA_DB_ID:
@@ -245,14 +270,13 @@ def create_notion_agenda_block(
         return ""
 
     properties: dict[str, Any] = {
-        "Data": _prop_date(block_date),
-        "Bloco horário": _prop_rich_text(f"{time_slot} — {task_title}"),
-        "Concluído": _prop_checkbox(completed),
+        _AGENDA_NAME_FIELD: _prop_title(task_title),
+        _AGENDA_DATE_FIELD: _prop_date(block_date),
+        _AGENDA_DONE_FIELD: _prop_checkbox(completed),
     }
 
-    # Se temos o ID da tarefa no Notion, criamos a relação
     if notion_task_page_id:
-        properties["Tarefa vinculada"] = _prop_relation(notion_task_page_id)
+        properties[_AGENDA_RELATION_FIELD] = _prop_relation(notion_task_page_id)
 
     payload = {
         "parent": {"database_id": NOTION_AGENDA_DB_ID},
@@ -262,7 +286,7 @@ def create_notion_agenda_block(
     result = _request("POST", "pages", payload)
     page_id = result["id"]
     notifier.success(
-        f"Bloco de agenda criado: {block_date} {time_slot} → '{task_title}'", AGENT_NAME
+        f"Bloco de agenda criado: {block_date} → '{task_title}'", AGENT_NAME
     )
     return page_id
 
@@ -289,7 +313,15 @@ def fetch_today_agenda_from_notion() -> list[dict]:
 
 
 def fetch_agenda_range_from_notion(start_date: str, end_date: str) -> list[dict]:
-    """Lê blocos da Agenda Diária do Notion em um intervalo de datas."""
+    """
+    Lê blocos da Agenda do Notion em um intervalo de datas.
+    Schema atual do DB:
+      - Name            (title) → task_title
+      - Data de entrega (date)  → date (YYYY-MM-DD)
+      - Tarefa vinculada(relation)
+      - Concluído       (checkbox)
+    Sem time_slot — agenda orientada a data de entrega.
+    """
     if not NOTION_TOKEN or not NOTION_AGENDA_DB_ID:
         return []
 
@@ -298,13 +330,12 @@ def fetch_agenda_range_from_notion(start_date: str, end_date: str) -> list[dict]
         "page_size": 100,
         "filter": {
             "and": [
-                {"property": "Data", "date": {"on_or_after": start_dt}},
-                {"property": "Data", "date": {"on_or_before": end_dt}},
+                {"property": _AGENDA_DATE_FIELD, "date": {"on_or_after": start_dt}},
+                {"property": _AGENDA_DATE_FIELD, "date": {"on_or_before": end_dt}},
             ]
         },
         "sorts": [
-            {"property": "Data", "direction": "ascending"},
-            {"property": "Bloco horário", "direction": "ascending"},
+            {"property": _AGENDA_DATE_FIELD, "direction": "ascending"},
         ],
     }
 
@@ -312,16 +343,17 @@ def fetch_agenda_range_from_notion(start_date: str, end_date: str) -> list[dict]
     blocks = []
     for page in result.get("results", []):
         props = page.get("properties", {})
-        block_text = _extract_rich_text(props.get("Bloco horário"))
-        time_slot, task_title = _split_agenda_block_text(block_text)
+        # Título vem do campo Name (title da página)
+        task_title = _extract_title(
+            props.get(_AGENDA_NAME_FIELD) or props.get("Nome")
+        ) or "Sem título"
         blocks.append(
             {
                 "notion_page_id": page["id"],
-                "date": _extract_date(props.get("Data")),
-                "time_slot": time_slot,
+                "date": _extract_date(props.get(_AGENDA_DATE_FIELD)),
+                "time_slot": "",        # agenda date-only, sem horário fixo
                 "task_title": task_title,
-                "completed": _extract_checkbox(props.get("Concluído")),
-                "raw_block": block_text,
+                "completed": _extract_checkbox(props.get(_AGENDA_DONE_FIELD)),
             }
         )
 
@@ -410,27 +442,87 @@ def sync_tasks_to_local() -> int:
     return count
 
 
-def _maybe_create_agenda_block(task_id: int, nt: dict) -> None:
-    """Cria bloco de agenda hoje para tarefa com scheduled_time, sem duplicar."""
-    from datetime import date as _date
+def _split_scheduled_time(scheduled_time: str) -> tuple[str, str]:
+    """
+    Quebra um scheduled_time em (block_date, hhmm).
+    Aceita:
+      - "HH:MM"            → (hoje, "HH:MM")
+      - "YYYY-MM-DD"       → (essa data, "")
+      - "YYYY-MM-DD HH:MM" → (essa data, "HH:MM")
+      - ISO datetime       → (data, "HH:MM")
+    Retorna ("", "") se não conseguir parsear nada útil.
+    """
+    raw = (scheduled_time or "").strip()
+    if not raw:
+        return "", ""
 
+    # Procura HH:MM em qualquer lugar
+    hhmm_match = _HHMM_RE.search(raw)
+    hhmm = ""
+    if hhmm_match:
+        h, m = hhmm_match.groups()
+        try:
+            hhmm = datetime.strptime(f"{int(h):02d}:{m}", "%H:%M").strftime("%H:%M")
+        except ValueError:
+            hhmm = ""
+
+    # Procura YYYY-MM-DD
+    date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", raw)
+    block_date = ""
+    if date_match:
+        try:
+            block_date = (
+                datetime.strptime(date_match.group(0), "%Y-%m-%d").date().isoformat()
+            )
+        except ValueError:
+            block_date = ""
+
+    # Sem data explícita mas com hora → assume hoje
+    if hhmm and not block_date:
+        block_date = date.today().isoformat()
+
+    return block_date, hhmm
+
+
+def _maybe_create_agenda_block(task_id: int, nt: dict) -> None:
+    """
+    Cria bloco de agenda para uma tarefa com scheduled_time, respeitando a data
+    real da tarefa. Pula a criação se:
+      - scheduled_time está vazio
+      - status é Concluído
+      - scheduled_time só tem data (sem HH:MM) — usuário precisa decidir o horário
+      - já existe bloco para essa task_id na data alvo
+    """
     scheduled_time = (nt.get("scheduled_time") or "").strip()
     status = nt.get("status") or "A fazer"
     if not scheduled_time or status == "Concluído":
         return
 
-    today = _date.today().isoformat()
-    # Evita duplicata: verifica se já existe bloco com esse task_id hoje
-    existing_blocks = memory.get_today_agenda()
+    block_date, hhmm = _split_scheduled_time(scheduled_time)
+
+    # Sem hora real, não vira bloco automático — o scheduled_time fica armazenado
+    # na tarefa, mas não criamos um bloco de agenda mal-formado.
+    if not hhmm:
+        notifier.info(
+            f"Tarefa {task_id} tem só data ({scheduled_time}) — bloco automático "
+            "não criado. Defina um horário no Notion ou crie o bloco manualmente.",
+            AGENT_NAME,
+        )
+        return
+
+    if not block_date:
+        block_date = date.today().isoformat()
+
+    # Evita duplicata: verifica se já existe bloco com esse task_id na data alvo
+    existing_blocks = memory.get_agenda_for_date(block_date, include_rescheduled=True)
     for b in existing_blocks:
         if str(b.get("task_id")) == str(task_id):
-            return  # Já tem bloco para essa tarefa hoje
+            return
 
-    # Normaliza o horário para "HH:MM-HH:MM"
-    time_slot = _normalize_time_slot(scheduled_time)
+    time_slot = _normalize_time_slot(hhmm)
 
     memory.create_agenda_block(
-        block_date=today,
+        block_date=block_date,
         time_slot=time_slot,
         task_title=nt.get("title") or "Sem título",
         task_id=task_id,
@@ -552,19 +644,132 @@ def _extract_checkbox(prop: Optional[dict]) -> bool:
     return bool(prop.get("checkbox", False))
 
 
+# ---------------------------------------------------------------------------
+# Horário previsto — aceita 'date' (atual) e 'rich_text' (legacy)
+# ---------------------------------------------------------------------------
+
+
+def _extract_scheduled_time(prop: Optional[dict]) -> str:
+    """
+    Lê 'Horário previsto' do Notion aceitando tanto o tipo 'date' (atual)
+    quanto 'rich_text' (schemas antigos).
+      - date:      retorna "YYYY-MM-DD HH:MM" ou "YYYY-MM-DD"
+      - rich_text: retorna o texto bruto (comportamento antigo)
+    """
+    if not prop:
+        return ""
+    ptype = prop.get("type")
+
+    # Caminho explícito por tipo declarado na resposta da API
+    if ptype == "date":
+        d = prop.get("date")
+        if not d:
+            return ""
+        start = d.get("start", "")
+        if not start:
+            return ""
+        if "T" in start:
+            try:
+                dt = datetime.fromisoformat(start)
+                return dt.strftime("%Y-%m-%d %H:%M")
+            except ValueError:
+                return start[:16].replace("T", " ")
+        return start
+
+    if ptype == "rich_text":
+        return _extract_rich_text(prop)
+
+    # Fallback para mocks de teste (sem 'type'): detecta pelo conteúdo
+    if "date" in prop and prop.get("date"):
+        return _extract_scheduled_time({"type": "date", **prop})
+    if "rich_text" in prop:
+        return _extract_rich_text(prop)
+    return ""
+
+
+def _prop_scheduled_time(scheduled_time: str) -> Optional[dict]:
+    """
+    Constrói a propriedade Notion 'Horário previsto' como tipo 'date'.
+    Aceita várias strings locais:
+      - "HH:MM"            → hoje + hora
+      - "YYYY-MM-DD"       → só data
+      - "YYYY-MM-DD HH:MM" → data + hora
+      - ISO datetime       → parseado
+    Retorna None para entrada vazia (chamador decide se omite a prop).
+    """
+    raw = (scheduled_time or "").strip()
+    if not raw:
+        return None
+
+    # Só "HH:MM" → assume hoje
+    if len(raw) == 5 and raw[2:3] == ":":
+        try:
+            datetime.strptime(raw, "%H:%M")
+            raw = f"{date.today().isoformat()} {raw}"
+        except ValueError:
+            pass
+
+    for fmt in (
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d",
+    ):
+        try:
+            dt = datetime.strptime(raw, fmt)
+            if fmt == "%Y-%m-%d":
+                return {"date": {"start": dt.date().isoformat()}}
+            return {"date": {"start": dt.strftime("%Y-%m-%dT%H:%M:%S")}}
+        except ValueError:
+            continue
+
+    # Último recurso: ISO com timezone ou similar
+    try:
+        dt = datetime.fromisoformat(raw)
+        return {"date": {"start": dt.strftime("%Y-%m-%dT%H:%M:%S")}}
+    except ValueError:
+        return {"date": {"start": raw}}
+
+
+# ---------------------------------------------------------------------------
+# Normalização de time_slot — tolerante a datetime completo
+# ---------------------------------------------------------------------------
+
+
+_HHMM_RE = re.compile(r"(\d{1,2}):(\d{2})")
+
+
 def _normalize_time_slot(value: str) -> str:
-    raw = value.strip()
+    """
+    Normaliza uma string de horário em 'HH:MM-HH:MM'.
+    Aceita formatos amplos: 'HH:MM', 'HH:MM-HH:MM', 'YYYY-MM-DD HH:MM',
+    ISO datetime etc. Extrai os HH:MM por regex, ignorando a parte de data —
+    assim não se confunde com o '-' do 'YYYY-MM-DD'.
+    """
+    raw = (value or "").strip()
     if not raw:
         return ""
-    if "-" in raw:
-        start_str, end_str = [part.strip() for part in raw.split("-", 1)]
-        return f"{start_str}-{end_str}"
-    try:
-        start_dt = datetime.strptime(raw, "%H:%M")
-        end_dt = start_dt + timedelta(hours=1)
-        return f"{start_dt.strftime('%H:%M')}-{end_dt.strftime('%H:%M')}"
-    except ValueError:
-        return raw
+
+    matches = _HHMM_RE.findall(raw)
+
+    def _fmt(h: str, m: str) -> Optional[str]:
+        try:
+            return datetime.strptime(f"{int(h):02d}:{m}", "%H:%M").strftime("%H:%M")
+        except ValueError:
+            return None
+
+    if len(matches) >= 2:
+        a = _fmt(*matches[0])
+        b = _fmt(*matches[1])
+        if a and b:
+            return f"{a}-{b}"
+    if len(matches) == 1:
+        a = _fmt(*matches[0])
+        if a:
+            start_dt = datetime.strptime(a, "%H:%M")
+            end_dt = start_dt + timedelta(hours=1)
+            return f"{a}-{end_dt.strftime('%H:%M')}"
+    return raw
 
 
 def _split_agenda_block_text(raw_text: str) -> tuple[str, str]:
@@ -609,7 +814,7 @@ def fetch_tasks_modified_since(last_sync_iso: str) -> list[dict]:
             "title": _extract_title(props.get("Nome")),
             "status": _extract_select(props.get("Status")),
             "priority": _extract_select(props.get("Prioridade")),
-            "scheduled_time": _extract_rich_text(props.get("Horário previsto")),
+            "scheduled_time": _extract_scheduled_time(props.get("Horário previsto")),
             "actual_time": _extract_rich_text(props.get("Horário real")),
             "last_edited_time": page.get("last_edited_time", ""),
         }
