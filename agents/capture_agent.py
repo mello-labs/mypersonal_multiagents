@@ -9,7 +9,7 @@
 #   INTEGRATION → 📋 Integrations Tracker
 #   IDEA        → (default LOG com tag "idea")
 #
-# O classificador usa chat_completions (cadeia Azure → OpenAI → Local).
+# O classificador usa chat_completions (cadeia OpenAI público → Local).
 # A escrita no Notion segue o mesmo padrão de notion_sync (requests + tenacity).
 # =============================================================================
 
@@ -425,6 +425,28 @@ _DISPATCH = {
 
 
 # ---------------------------------------------------------------------------
+# Helper: audit tolerante (Redis pode estar fora em dev local)
+# ---------------------------------------------------------------------------
+
+
+def _safe_audit(**kwargs: Any) -> None:
+    """memory.create_audit_event com fallback silencioso se Redis indisponível.
+
+    Usa sys.stderr diretamente (sem notifier) pra evitar recursão quando o
+    próprio notifier tenta persistir algo no Redis e falha.
+    """
+    try:
+        memory.create_audit_event(**kwargs)
+    except Exception as exc:
+        import sys
+        print(
+            f"[capture_agent] audit event não persistido: "
+            f"{type(exc).__name__}",
+            file=sys.stderr,
+        )
+
+
+# ---------------------------------------------------------------------------
 # API principal
 # ---------------------------------------------------------------------------
 
@@ -447,7 +469,7 @@ def capture(text: str, *, source: str = "manual") -> dict[str, Any]:
             AGENT_NAME,
         )
         # Audit local
-        memory.create_audit_event(
+        _safe_audit(
             event_type="capture",
             title=f"[{category}] {cls['title'][:100]}",
             details=cls.get("summary", ""),
@@ -467,7 +489,7 @@ def capture(text: str, *, source: str = "manual") -> dict[str, Any]:
         }
     except Exception as exc:
         notifier.error(f"Falha ao salvar no Notion ({category}): {exc}", AGENT_NAME)
-        memory.create_audit_event(
+        _safe_audit(
             event_type="capture_failed",
             title=f"[{category}] {cls['title'][:100]}",
             details=str(exc),

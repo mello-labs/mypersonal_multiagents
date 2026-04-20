@@ -15,26 +15,13 @@ from pathlib import Path
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 # ---------------------------------------------------------------------------
-# LLM — OpenAI clássico (legado, mantido p/ rollback)
+# LLM — OpenAI público (provider primário)
 # ---------------------------------------------------------------------------
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_FALLBACK_MODEL: str = os.getenv("OPENAI_FALLBACK_MODEL", "gpt-3.5-turbo")
 
-# ---------------------------------------------------------------------------
-# LLM — Azure OpenAI (provider primário)
-# ---------------------------------------------------------------------------
-# Para ativar, defina AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY + AZURE_OPENAI_DEPLOYMENT.
-# openai_utils detecta e prioriza Azure sobre OpenAI público.
-AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
-AZURE_OPENAI_API_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
-AZURE_OPENAI_DEPLOYMENT: str = os.getenv("AZURE_OPENAI_DEPLOYMENT", "")
-AZURE_OPENAI_API_VERSION: str = os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
-AZURE_OPENAI_FALLBACK_DEPLOYMENT: str = os.getenv(
-    "AZURE_OPENAI_FALLBACK_DEPLOYMENT", ""
-)
-
-# Modelo local via Docker Model Runner (Gemma3 4B) — só em dev local
+# Modelo local via Docker Model Runner (Gemma3 4B) — fallback dev local
 LOCAL_MODEL_ENABLED: bool = os.getenv("LOCAL_MODEL_ENABLED", "false").lower() == "true"
 LOCAL_MODEL_BASE_URL: str = os.getenv(
     "LOCAL_MODEL_BASE_URL", "http://localhost:12434/engines/llama.cpp/v1"
@@ -42,11 +29,7 @@ LOCAL_MODEL_BASE_URL: str = os.getenv(
 LOCAL_MODEL_NAME: str = os.getenv("LOCAL_MODEL_NAME", "docker.io/ai/gemma3:4B-F16")
 
 # Sinal agregado — True se qualquer provider LLM está minimamente configurado
-LLM_CONFIGURED: bool = bool(
-    (AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY and AZURE_OPENAI_DEPLOYMENT)
-    or OPENAI_API_KEY
-    or LOCAL_MODEL_ENABLED
-)
+LLM_CONFIGURED: bool = bool(OPENAI_API_KEY or LOCAL_MODEL_ENABLED)
 
 # ---------------------------------------------------------------------------
 # Notion — API + databases do NEØ Command Center (workspace "neoflw")
@@ -143,8 +126,8 @@ def validate_config() -> list[str]:
     warnings: list[str] = []
     if not LLM_CONFIGURED:
         warnings.append(
-            "Nenhum provider LLM configurado — defina AZURE_OPENAI_* "
-            "ou OPENAI_API_KEY ou LOCAL_MODEL_ENABLED=true."
+            "Nenhum provider LLM configurado — defina OPENAI_API_KEY "
+            "ou LOCAL_MODEL_ENABLED=true."
         )
     if not NOTION_TOKEN:
         warnings.append("NOTION_TOKEN não configurada — Notion Sync desabilitado.")
