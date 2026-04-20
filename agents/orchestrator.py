@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Importa os agentes especialistas
 from agents import (  # noqa: E402
     calendar_sync,
+    capture_agent,
     focus_guard,
     notion_sync,
     retrospective,
@@ -100,6 +101,23 @@ AGENTS_REGISTRY = {
             "fetch_week",
             "export_block",
             "status",
+        ],
+    },
+    "capture_agent": {
+        "description": (
+            "Segundo cérebro: recebe texto livre e roteia para o database correto "
+            "do NEØ Command Center (Projetos / Tarefas / Decisões / Work Log / Integrations). "
+            "Use quando o usuário mandar uma anotação, ideia, tarefa, decisão, "
+            "relato do dia ou link sem especificar destino."
+        ),
+        "actions": [
+            "capture",
+            "classify",
+            "capture_log",
+            "capture_task",
+            "capture_decision",
+            "capture_project",
+            "capture_integration",
         ],
     },
 }
@@ -501,6 +519,7 @@ _AGENT_HANDLERS = {
     "validator": validator.handle_handoff,
     "retrospective": retrospective.handle_handoff,
     "calendar_sync": calendar_sync.handle_handoff,
+    "capture_agent": capture_agent.handle_handoff,
 }
 
 

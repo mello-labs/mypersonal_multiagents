@@ -710,6 +710,24 @@ Exemplos:
         "ecosistema", help="Health check e relatório do ecossistema externo"
     )
 
+    # capture (segundo cérebro)
+    capture_parser = subparsers.add_parser(
+        "capture",
+        help="Classifica texto livre e salva no database Notion correto (NEØ Command Center)",
+    )
+    capture_parser.add_argument("text", nargs=argparse.REMAINDER)
+
+    capture_classify_parser = subparsers.add_parser(
+        "classify",
+        help="Mostra como o classificador categorizaria um texto (dry-run)",
+    )
+    capture_classify_parser.add_argument("text", nargs=argparse.REMAINDER)
+
+    # telegram bot (long-poll — bloqueante)
+    subparsers.add_parser(
+        "telegram", help="Inicia o bot do Telegram em long-poll (worker mode)"
+    )
+
     # calendar
     calendar_parser = subparsers.add_parser(
         "calendar", help="Gerencia integração opcional com Google Calendar"
@@ -722,6 +740,43 @@ Exemplos:
     cal_sub.add_parser("status", help="Status da integração opcional com o Calendar")
 
     return parser
+
+
+# ---------------------------------------------------------------------------
+# Capture (segundo cérebro → NEØ Command Center)
+# ---------------------------------------------------------------------------
+
+
+def cmd_capture(text: str) -> None:
+    text = (text or "").strip()
+    if not text:
+        notifier.error("Uso: python main.py capture <texto livre>", "main")
+        return
+    from agents import capture_agent
+    import json as _json
+
+    result = capture_agent.capture(text, source="cli")
+    if result.get("status") == "ok":
+        notifier.success(
+            f"[{result['category']}] → {result['destination']}", "capture"
+        )
+        if result.get("notion_url"):
+            print(f"  {result['notion_url']}")
+    else:
+        notifier.error(f"Falhou: {result.get('error')}", "capture")
+        print(_json.dumps(result, indent=2, ensure_ascii=False))
+
+
+def cmd_classify(text: str) -> None:
+    text = (text or "").strip()
+    if not text:
+        notifier.error("Uso: python main.py classify <texto livre>", "main")
+        return
+    from agents import capture_agent
+    import json as _json
+
+    cls = capture_agent.classify(text)
+    print(_json.dumps(cls, indent=2, ensure_ascii=False))
 
 
 # ---------------------------------------------------------------------------
@@ -789,6 +844,13 @@ def main() -> None:
             cmd_calendar_status()
         else:
             notifier.error("Use: python main.py calendar [auth|import|status]", "main")
+    elif command == "capture":
+        cmd_capture(" ".join(getattr(args, "text", []) or []))
+    elif command == "classify":
+        cmd_classify(" ".join(getattr(args, "text", []) or []))
+    elif command == "telegram":
+        from agents import telegram_bot
+        telegram_bot.run()
     else:
         parser.print_help()
 
