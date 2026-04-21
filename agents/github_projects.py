@@ -281,6 +281,92 @@ def _notion_headers() -> dict[str, str]:
     }
 
 
+def _normalize_notion_db_id(raw: str) -> str:
+    s = raw.replace("-", "").strip()
+    if len(s) == 32:
+        return f"{s[0:8]}-{s[8:12]}-{s[12:16]}-{s[16:20]}-{s[20:32]}"
+    return raw.strip()
+
+
+def notion_tarefas_diagnostic() -> str:
+    """
+    Lê schema + amostra de páginas de NOTION_DB_TAREFAS e tamanho do mapa Redis.
+    Use para confirmar integration, nomes de propriedades e se há linhas criadas.
+    """
+    lines: list[str] = []
+    if not NOTION_TOKEN or not NOTION_DB_TAREFAS:
+        return "NOTION_TOKEN ou NOTION_DB_TAREFAS vazio no config.\n"
+
+    db_id = _normalize_notion_db_id(NOTION_DB_TAREFAS)
+
+    url = f"{NOTION_API_BASE}/databases/{db_id}"
+    r = requests.get(url, headers=_notion_headers(), timeout=20)
+    if not r.ok:
+        lines.append(
+            f"GET database falhou ({r.status_code}): {r.text[:500]}\n"
+            "→ Confirma que a integration tem acesso ao database (Share → invite)."
+        )
+        return "\n".join(lines)
+
+    data = r.json()
+    title_arr = data.get("title", [])
+    db_title = ""
+    if title_arr and isinstance(title_arr[0], dict):
+        db_title = title_arr[0].get("plain_text", "") or ""
+    lines.append(f"Database OK: {db_title or '(sem título)'}")
+    lines.append(f"ID usado na API: {db_id}")
+
+    props = data.get("properties", {})
+    lines.append("\nPropriedades no Notion (sync espera: Tarefa, Descrição, Status, Prioridade):")
+    for name, meta in sorted(props.items()):
+        lines.append(f"  - {name!r} → {meta.get('type', '?')}")
+
+    required = [
+        ("Tarefa", "title"),
+        ("Descrição", "rich_text"),
+        ("Status", "select"),
+        ("Prioridade", "select"),
+    ]
+    for name, want in required:
+        if name not in props:
+            lines.append(f"\n[!] Falta {name!r} — POST do sync falha 400.")
+        elif props[name].get("type") != want:
+            lines.append(
+                f"\n[!] {name!r} é tipo {props[name].get('type')!r} (esperado {want!r})."
+            )
+
+    q = requests.post(
+        f"{NOTION_API_BASE}/databases/{db_id}/query",
+        headers=_notion_headers(),
+        json={"page_size": 15},
+        timeout=30,
+    )
+    if not q.ok:
+        lines.append(f"\nQuery falhou ({q.status_code}): {q.text[:400]}")
+        return "\n".join(lines)
+
+    results = q.json().get("results", [])
+    lines.append(f"\nPáginas neste database (amostra até 15): {len(results)}")
+    for page in results:
+        pid = page.get("id", "")
+        pprops = page.get("properties", {})
+        row_title = ""
+        for _key, pv in pprops.items():
+            if pv.get("type") == "title":
+                t = pv.get("title") or []
+                if t and isinstance(t[0], dict):
+                    row_title = t[0].get("plain_text", "") or ""
+                break
+        if not row_title:
+            row_title = "(sem title)"
+        ell = "…" if len(row_title) > 78 else ""
+        lines.append(f"  · {row_title[:78]}{ell}  id={pid[:8]}…")
+
+    m = _get_issue_map()
+    lines.append(f"\nMapa Redis github↔Notion: {len(m)} chaves.")
+    return "\n".join(lines)
+
+
 def _p_title(text: str) -> dict:
     return {"title": [{"text": {"content": text[:2000]}}]}
 
@@ -323,6 +409,17 @@ def _get_issue_map() -> dict[str, str]:
 
 def _set_issue_map(m: dict[str, str]) -> None:
     memory.set_state(STATE_MAP_KEY, m)
+
+
+def clear_issue_notion_map() -> None:
+    """
+    Apaga o mapa issue→página no Redis (`state:github_projects:issue_notion_map`).
+    O próximo `sync` fará POST de novo para cada item (criadas>0).
+
+    Nota: páginas antigas no Notion não são apagadas — podes ficar com
+    duplicados se não limpares o DB manualmente.
+    """
+    memory.set_state(STATE_MAP_KEY, {})
 
 
 def sync_org_to_notion(
@@ -391,7 +488,7 @@ def sync_org_to_notion(
                 f"{NOTION_API_BASE}/pages",
                 headers=_notion_headers(),
                 json={
-                    "parent": {"database_id": NOTION_DB_TAREFAS},
+                    "parent": {"database_id": _normalize_notion_db_id(NOTION_DB_TAREFAS)},
                     "properties": props,
                 },
                 timeout=30,

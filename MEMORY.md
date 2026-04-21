@@ -76,6 +76,13 @@ Notion (DB Agenda / TO-DO)
   `python main.py github sync [--org SLUG] [--dry-run]` importa boards
   para `NOTION_DB_TAREFAS`. Mapa issue→página: Redis
   `state:github_projects:issue_notion_map`.
+- **Onde ver no Notion:** o database configurado em `NOTION_DB_TAREFAS`
+  (ex.: **Tarefas & Ações** no Command Center), **não** a página “Gestão
+  de tempo” nem blocos TO-DO antigos — são superfícies diferentes.
+- Diagnóstico: `python main.py github notion-check` (schema do DB,
+  amostra de linhas, tamanho do mapa Redis).
+- Reimportar do zero (novos POST): `python main.py github reset-map`
+  (limpa Redis; páginas antigas no Notion não são apagadas).
 
 ────────────────────────────────────────
 

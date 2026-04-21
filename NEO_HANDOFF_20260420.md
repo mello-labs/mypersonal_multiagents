@@ -97,17 +97,25 @@ Azure foi 100% removido. Três arquivos tocados:
 - [x] #7 Conectar Notion Integration nas 5 DBs (via NEOBOT na pasta
       pai)
 - [x] #8 Smoke test end-to-end capture
-- [ ] *#4 `agents/github_projects.py`*
+- [x] #4 `agents/github_projects.py` — entregue: GraphQL v2, CLI
+      `github discover|sync`, destino `NOTION_DB_TAREFAS`, mapa Redis
+      `github_projects:issue_notion_map`. Direção v1: GH → Notion.
 
 ────────────────────────────────────────
 
-## ◭ Pendências pra retomar
+## ◭ Proxima pra retomar
 
-### Domingo (próxima sessão)
+### GitHub Projects (pós-v1 — opcional)
 
-**#4 — `agents/github_projects.py`** (GraphQL Projects v2)
+**#4** concluído no código; operar com:
 
-Vars já prontas no `config.py`:
+```bash
+python main.py github discover --root /Users/nettomello/neomello
+python main.py github sync --dry-run
+python main.py github sync
+```
+
+Vars no `config.py` / `.env`:
 
 ```python
 GITHUB_TOKEN  # env: GITHUB_TOKEN
@@ -119,12 +127,8 @@ GITHUB_PROJECTS = {
 }
 ```
 
-Escopo: mirror bidirecional issues ↔ Tarefas Notion, via GraphQL v2
-API. Decisões de arquitetura pra tomar:
-
-- Event-driven (webhook) vs poll-based (cron)?
-- Source of truth: Notion ou GitHub?
-- Sincronizar comments/labels ou só título+status+assignee?
+Melhorias futuras (se quiseres): cron no Railway; webhook GitHub;
+espelho Notion → GH (não é v1).
 
 ### Antes de deployar no Railway
 

@@ -743,6 +743,14 @@ Exemplos:
         action="store_true",
         help="Só lista o que seria criado/atualizado (sem Notion/Redis)",
     )
+    gh_sub.add_parser(
+        "reset-map",
+        help="Limpa mapa issue→Notion no Redis (próximo sync recria linhas)",
+    )
+    gh_sub.add_parser(
+        "notion-check",
+        help="Mostra schema do NOTION_DB_TAREFAS + amostra de páginas (diagnóstico)",
+    )
 
     # capture (segundo cérebro)
     capture_parser = subparsers.add_parser(
@@ -828,6 +836,15 @@ def cmd_github(args) -> None:
             for org, (c, u) in res.items():
                 notifier.info(f"{org}: criadas={c} atualizadas={u}", "github")
             notifier.separator()
+    elif args.github_action == "reset-map":
+        github_projects.clear_issue_notion_map()
+        notifier.success(
+            "Mapa GitHub→Notion limpo no Redis. Próximo sync cria páginas novamente "
+            "(páginas antigas no Notion continuam lá — evita duplicar se não limpares o DB).",
+            "github",
+        )
+    elif args.github_action == "notion-check":
+        print(github_projects.notion_tarefas_diagnostic())
 
 
 def cmd_classify(text: str) -> None:
