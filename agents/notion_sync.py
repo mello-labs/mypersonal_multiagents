@@ -21,6 +21,7 @@
 import os
 import re
 import sys
+import hashlib
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
@@ -539,6 +540,11 @@ def sync_agenda_range_to_local(start_date: str, end_date: str) -> int:
     local_blocks = memory.list_agenda_between(
         start_date, end_date, include_rescheduled=True
     )
+    existing_notion_ids = {
+        str(block.get("notion_page_id"))
+        for block in local_blocks
+        if block.get("notion_page_id")
+    }
     existing_keys = {
         (
             block.get("block_date"),
@@ -550,19 +556,34 @@ def sync_agenda_range_to_local(start_date: str, end_date: str) -> int:
 
     created = 0
     for block in blocks:
+        notion_page_id = str(block.get("notion_page_id") or "")
+        if notion_page_id and notion_page_id in existing_notion_ids:
+            continue
+
         block_date = block.get("date") or start_date
         task_title = block.get("task_title") or "Sem título"
-        key = (block_date, block.get("time_slot"), task_title.strip().lower())
-        if not block.get("time_slot") or key in existing_keys:
+        time_slot = block.get("time_slot") or ""
+        if not time_slot:
+            time_slot = _synthetic_time_slot_for_date_only(
+                notion_page_id=notion_page_id,
+                task_title=task_title,
+                block_date=block_date,
+                used_keys=existing_keys,
+            )
+
+        key = (block_date, time_slot, task_title.strip().lower())
+        if key in existing_keys:
             continue
 
         memory.create_agenda_block(
             block_date=block_date,
-            time_slot=block["time_slot"],
+            time_slot=time_slot,
             task_title=task_title,
-            notion_page_id=block.get("notion_page_id"),
+            notion_page_id=notion_page_id or None,
         )
         existing_keys.add(key)
+        if notion_page_id:
+            existing_notion_ids.add(notion_page_id)
         created += 1
 
     if created:
@@ -770,6 +791,29 @@ def _normalize_time_slot(value: str) -> str:
             end_dt = start_dt + timedelta(hours=1)
             return f"{a}-{end_dt.strftime('%H:%M')}"
     return raw
+
+
+def _synthetic_time_slot_for_date_only(
+    notion_page_id: str,
+    task_title: str,
+    block_date: str,
+    used_keys: set[tuple[str, str, str]],
+) -> str:
+    """
+    Gera slot de 1h para blocos date-only da agenda do Notion.
+    Determinístico por notion_page_id (ou data+título) e sem colisão local.
+    """
+    seed_src = (notion_page_id or f"{block_date}:{task_title}").encode("utf-8")
+    digest = hashlib.sha1(seed_src).hexdigest()
+    base = int(digest[:2], 16) % 12  # janela 08:00..19:00
+    title_key = task_title.strip().lower()
+
+    for offset in range(12):
+        hour = 8 + ((base + offset) % 12)
+        slot = f"{hour:02d}:00-{(hour + 1):02d}:00"
+        if (block_date, slot, title_key) not in used_keys:
+            return slot
+    return "19:00-20:00"
 
 
 def _split_agenda_block_text(raw_text: str) -> tuple[str, str]:
