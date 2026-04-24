@@ -7,6 +7,7 @@
 
 __all__ = [
     "calendar_sync",
+    "capture_agent",
     "focus_guard",
     "life_guard",
     "notion_sync",

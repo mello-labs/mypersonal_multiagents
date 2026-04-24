@@ -325,6 +325,34 @@ def _build_rule_based_route(
             "clarification_question": None,
         }
 
+    # Fallback determinístico: texto livre sem intent reconhecida → capture_agent.
+    # Evita que anotações, ideias e relatos caiam no fluxo LLM sem destino.
+    _CAPTURE_SKIP = (
+        "python",
+        "error",
+        "erro",
+        "bug",
+        "traceback",
+        "exception",
+        "como ",
+        "qual ",
+        "quais ",
+        "quando ",
+        "por que",
+        "explica",
+        "ajuda",
+        "help",
+    )
+    if not any(skip in combined for skip in _CAPTURE_SKIP) and len(user_input.split()) >= 3:
+        return {
+            "intent": "capturar anotação livre",
+            "handoffs": [
+                {"agent": "capture_agent", "payload": {"action": "capture", "text": user_input}}
+            ],
+            "requires_user_input": False,
+            "clarification_question": None,
+        }
+
     return None
 
 
