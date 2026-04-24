@@ -30,9 +30,13 @@ from config import (
 )
 from core import notifier
 
-# Caminho do socket Unix do Docker Model Runner (Mac-local)
-_DOCKER_SOCKET = (
-    "/Users/nettomello/Library/Containers/com.docker.docker/Data/inference.sock"
+# Caminho do socket Unix do Docker Model Runner — configurável via env var
+# ou auto-detectado no path padrão do macOS.
+_DOCKER_SOCKET = os.getenv(
+    "DOCKER_MODEL_RUNNER_SOCKET",
+    os.path.expanduser(
+        "~/Library/Containers/com.docker.docker/Data/inference.sock"
+    ),
 )
 
 

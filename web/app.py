@@ -11,6 +11,7 @@ import asyncio
 import jinja2 as _jinja2
 import json
 import os
+import re
 import sys
 import threading
 import uuid
@@ -160,6 +161,10 @@ def _format_slot_label(
     return day_label if day_label else ""
 
 
+_HHMM_RE = re.compile(r"(\d{1,2}):(\d{2})")
+_DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+
+
 def _format_scheduled_time(scheduled_time: str | None, today: date) -> str:
     """
     Formata scheduled_time de forma legível para o front.
@@ -170,15 +175,12 @@ def _format_scheduled_time(scheduled_time: str | None, today: date) -> str:
       "09:00"            → "Hoje · 09:00"
     Retorna "" se vazio.
     """
-    import re as _re
-
     raw = (scheduled_time or "").strip()
     if not raw:
         return ""
 
-    _HHMM = _re.compile(r"(\d{1,2}):(\d{2})")
-    date_match = _re.search(r"(\d{4})-(\d{2})-(\d{2})", raw)
-    hhmm_match = _HHMM.search(raw)
+    date_match = _DATE_RE.search(raw)
+    hhmm_match = _HHMM_RE.search(raw)
 
     block_date = None
     if date_match:
@@ -564,9 +566,8 @@ async def health():
         tasks_count = len(memory.list_all_tasks())
         result["db"] = "ok"
         result["tasks"] = tasks_count
-    except Exception as e:
+    except Exception:
         result["db"] = "unavailable"
-        result["db_error"] = str(e)[:120]
     return JSONResponse(result)
 
 
@@ -769,6 +770,9 @@ async def chat_page(request: Request):
     return templates.TemplateResponse(request, "chat_page.html", ctx)
 
 
+_VALID_PRIORITIES = {"Alta", "Média", "Baixa"}
+
+
 @app.post("/task", response_class=HTMLResponse)
 async def create_task(
     request: Request,
@@ -776,10 +780,11 @@ async def create_task(
     priority: str = Form("Média"),
     scheduled_time: str = Form(""),
 ):
+    safe_priority = priority if priority in _VALID_PRIORITIES else "Média"
     _safe(
         lambda: memory.create_task(
             title=title,
-            priority=priority,
+            priority=safe_priority,
             scheduled_time=scheduled_time or None,
         ),
         None,
