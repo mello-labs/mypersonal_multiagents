@@ -52,6 +52,9 @@ from config import REDIS_URL
 
 _redis_client: Optional[redis_lib.Redis] = None
 _lock = threading.Lock()
+# Dedicated lock for singleton initialization — separate from data mutation lock
+# so that _lock can be used freely in CRUD operations without blocking _r().
+_init_lock = threading.Lock()
 
 # Só tenta auto-start no macOS com URL local (nunca em container Railway/Docker)
 _IS_LOCAL = any(h in REDIS_URL for h in ("localhost", "127.0.0.1"))
@@ -79,11 +82,9 @@ def _start_local_redis() -> None:
 
 def _r() -> redis_lib.Redis:
     global _redis_client
-    # Fast-path: read without lock (safe after first assignment)
-    if _redis_client is not None:
-        return _redis_client
-    with _lock:
-        # Double-checked locking: re-verify inside the lock
+    # Always initialize inside _init_lock to guarantee visibility across threads
+    # without relying on double-checked locking semantics.
+    with _init_lock:
         if _redis_client is not None:
             return _redis_client
         client = redis_lib.from_url(
@@ -107,7 +108,7 @@ def _r() -> redis_lib.Redis:
                     "Verifique se REDIS_URL está configurado corretamente no Railway."
                 )
         _redis_client = client
-    return _redis_client
+        return _redis_client
 
 
 # ---------------------------------------------------------------------------
@@ -309,13 +310,14 @@ def list_all_tasks() -> list[dict]:
 
 
 def update_task_notion_id(task_id: int, notion_page_id: str) -> None:
-    r = _r()
-    old_notion_page_id = r.hget(f"task:{task_id}", "notion_page_id")
-    r.hset(f"task:{task_id}", "notion_page_id", notion_page_id)
-    r.hset(f"task:{task_id}", "updated_at", _now())
-    if old_notion_page_id and old_notion_page_id != notion_page_id:
-        r.delete(f"tasks:notion:{old_notion_page_id}")
-    r.set(f"tasks:notion:{notion_page_id}", task_id)
+    with _lock:
+        r = _r()
+        old_notion_page_id = r.hget(f"task:{task_id}", "notion_page_id")
+        r.hset(f"task:{task_id}", "notion_page_id", notion_page_id)
+        r.hset(f"task:{task_id}", "updated_at", _now())
+        if old_notion_page_id and old_notion_page_id != notion_page_id:
+            r.delete(f"tasks:notion:{old_notion_page_id}")
+        r.set(f"tasks:notion:{notion_page_id}", task_id)
 
 
 def delete_task(task_id: int) -> None:

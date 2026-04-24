@@ -780,11 +780,16 @@ async def create_task(
     priority: str = Form("Média"),
     scheduled_time: str = Form(""),
 ):
-    safe_priority = priority if priority in _VALID_PRIORITIES else "Média"
+    if priority not in _VALID_PRIORITIES:
+        import logging
+        logging.getLogger("web.app").warning(
+            "Prioridade inválida recebida: %r — usando 'Média'", priority
+        )
+        priority = "Média"
     _safe(
         lambda: memory.create_task(
             title=title,
-            priority=safe_priority,
+            priority=priority,
             scheduled_time=scheduled_time or None,
         ),
         None,
