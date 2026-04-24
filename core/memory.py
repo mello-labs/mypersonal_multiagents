@@ -52,6 +52,9 @@ from config import REDIS_URL
 
 _redis_client: Optional[redis_lib.Redis] = None
 _lock = threading.Lock()
+# Dedicated lock for singleton initialization — separate from data mutation lock
+# so that _lock can be used freely in CRUD operations without blocking _r().
+_init_lock = threading.Lock()
 
 # Só tenta auto-start no macOS com URL local (nunca em container Railway/Docker)
 _IS_LOCAL = any(h in REDIS_URL for h in ("localhost", "127.0.0.1"))
@@ -79,7 +82,19 @@ def _start_local_redis() -> None:
 
 def _r() -> redis_lib.Redis:
     global _redis_client
-    if _redis_client is None:
+    # Fast path: avoid taking _init_lock once the singleton has already been
+    # initialized, so concurrent read-only callers do not serialize on every
+    # Redis access.
+    client = _redis_client
+    if client is not None:
+        return client
+
+    # Slow path: initialize under _init_lock, with a second check in case
+    # another thread completed initialization while we were waiting.
+    with _init_lock:
+        client = _redis_client
+        if client is not None:
+            return client
         client = redis_lib.from_url(
             REDIS_URL, decode_responses=True, socket_connect_timeout=2
         )
@@ -101,7 +116,7 @@ def _r() -> redis_lib.Redis:
                     "Verifique se REDIS_URL está configurado corretamente no Railway."
                 )
         _redis_client = client
-    return _redis_client
+        return _redis_client
 
 
 # ---------------------------------------------------------------------------
@@ -265,9 +280,13 @@ def get_task(task_id: int) -> Optional[dict]:
 def get_tasks_by_status(status: str) -> list[dict]:
     r = _r()
     task_ids = r.zrange("tasks:all", 0, -1)
-    tasks = []
+    if not task_ids:
+        return []
+    pipe = r.pipeline()
     for tid in task_ids:
-        data = r.hgetall(f"task:{tid}")
+        pipe.hgetall(f"task:{tid}")
+    tasks = []
+    for tid, data in zip(task_ids, pipe.execute()):
         if data and data.get("status") == status:
             data["id"] = int(tid)
             tasks.append(_to_dict(data, int_fields=["id"]))
@@ -285,9 +304,13 @@ def get_today_tasks() -> list[dict]:
 def list_all_tasks() -> list[dict]:
     r = _r()
     task_ids = r.zrevrange("tasks:all", 0, -1)  # mais recentes primeiro
-    tasks = []
+    if not task_ids:
+        return []
+    pipe = r.pipeline()
     for tid in task_ids:
-        data = r.hgetall(f"task:{tid}")
+        pipe.hgetall(f"task:{tid}")
+    tasks = []
+    for tid, data in zip(task_ids, pipe.execute()):
         if data:
             data["id"] = int(tid)
             tasks.append(_to_dict(data, int_fields=["id"]))
@@ -295,14 +318,18 @@ def list_all_tasks() -> list[dict]:
 
 
 def update_task_notion_id(task_id: int, notion_page_id: str) -> None:
-    r = _r()
-    r.hset(f"task:{task_id}", "notion_page_id", notion_page_id)
-    r.hset(f"task:{task_id}", "updated_at", _now())
-    r.set(f"tasks:notion:{notion_page_id}", task_id)
+    with _lock:
+        r = _r()
+        old_notion_page_id = r.hget(f"task:{task_id}", "notion_page_id")
+        r.hset(f"task:{task_id}", "notion_page_id", notion_page_id)
+        r.hset(f"task:{task_id}", "updated_at", _now())
+        if old_notion_page_id and old_notion_page_id != notion_page_id:
+            r.delete(f"tasks:notion:{old_notion_page_id}")
+        r.set(f"tasks:notion:{notion_page_id}", task_id)
 
 
 def delete_task(task_id: int) -> None:
-    """Remove uma tarefa do Redis (hash + índices tasks:all e tasks:notion)."""
+    """Remove uma tarefa do Redis (hash + índices tasks:all, tasks:notion e blocks:task)."""
     with _lock:
         r = _r()
         task_key = f"task:{task_id}"
@@ -311,6 +338,7 @@ def delete_task(task_id: int) -> None:
         r.zrem("tasks:all", str(task_id))
         if notion_page_id:
             r.delete(f"tasks:notion:{notion_page_id}")
+        r.delete(f"blocks:task:{task_id}")
 
 
 # =============================================================================
@@ -412,15 +440,57 @@ def list_agenda_between(
     if end_dt < start_dt:
         start_dt, end_dt = end_dt, start_dt
 
-    blocks = []
+    # Collect all dates in range
+    dates: list[str] = []
     cursor = start_dt
     while cursor <= end_dt:
-        blocks.extend(
-            get_agenda_for_date(
-                cursor.isoformat(), include_rescheduled=include_rescheduled
-            )
-        )
+        dates.append(cursor.isoformat())
         cursor += timedelta(days=1)
+
+    r = _r()
+
+    # Batch all zrange calls in one pipeline
+    pipe = r.pipeline()
+    for d in dates:
+        pipe.zrange(f"blocks:date:{d}", 0, -1)
+    date_block_ids: list[list] = pipe.execute()
+
+    # Collect unique block IDs preserving order
+    seen: set[str] = set()
+    ordered_block_ids: list[str] = []
+    for block_ids in date_block_ids:
+        for bid in block_ids:
+            if bid not in seen:
+                seen.add(bid)
+                ordered_block_ids.append(bid)
+
+    if not ordered_block_ids:
+        return []
+
+    # Batch all hgetall calls
+    pipe = r.pipeline()
+    for bid in ordered_block_ids:
+        pipe.hgetall(f"block:{bid}")
+    raw_blocks = pipe.execute()
+
+    _block_int_fields = [
+        "id",
+        "task_id",
+        "completed",
+        "rescheduled",
+        "rescheduled_to_block_id",
+        "source_block_id",
+        "reschedule_count",
+    ]
+
+    blocks: list[dict] = []
+    for bid, data in zip(ordered_block_ids, raw_blocks):
+        if not data:
+            continue
+        if not include_rescheduled and data.get("rescheduled", "0") == "1":
+            continue
+        data["id"] = int(bid)
+        blocks.append(_to_dict(data, int_fields=_block_int_fields))
     return blocks
 
 
@@ -714,9 +784,13 @@ def create_alert(alert_type: str, message: str) -> int:
 def get_pending_alerts() -> list[dict]:
     r = _r()
     alert_ids = r.zrevrange("alerts:pending", 0, -1)
-    alerts = []
+    if not alert_ids:
+        return []
+    pipe = r.pipeline()
     for aid in alert_ids:
-        data = r.hgetall(f"alert:{aid}")
+        pipe.hgetall(f"alert:{aid}")
+    alerts = []
+    for aid, data in zip(alert_ids, pipe.execute()):
         if data and data.get("acknowledged", "0") == "0":
             data["id"] = int(aid)
             alerts.append(_to_dict(data, int_fields=["id", "acknowledged"]))
@@ -726,9 +800,13 @@ def get_pending_alerts() -> list[dict]:
 def list_alerts(limit: int = 50, include_acknowledged: bool = True) -> list[dict]:
     r = _r()
     alert_ids = r.zrevrange("alerts:all", 0, max(limit - 1, 0))
-    alerts = []
+    if not alert_ids:
+        return []
+    pipe = r.pipeline()
     for aid in alert_ids:
-        data = r.hgetall(f"alert:{aid}")
+        pipe.hgetall(f"alert:{aid}")
+    alerts = []
+    for aid, data in zip(alert_ids, pipe.execute()):
         if not data:
             continue
         if not include_acknowledged and data.get("acknowledged", "0") != "0":
@@ -783,9 +861,13 @@ def create_audit_event(
 def list_audit_events(limit: int = 50, event_type: Optional[str] = None) -> list[dict]:
     r = _r()
     event_ids = r.zrevrange("audit:events", 0, max(limit - 1, 0))
-    events = []
+    if not event_ids:
+        return []
+    pipe = r.pipeline()
     for eid in event_ids:
-        data = r.hgetall(f"audit:{eid}")
+        pipe.hgetall(f"audit:{eid}")
+    events = []
+    for eid, data in zip(event_ids, pipe.execute()):
         if not data:
             continue
         if event_type and data.get("event_type") != event_type:
@@ -804,9 +886,13 @@ def get_sessions_since(since_iso: str) -> list[dict]:
     r = _r()
     since_ts = _ts(since_iso)
     session_ids = r.zrangebyscore("sessions:all", since_ts, "+inf")
-    sessions = []
+    if not session_ids:
+        return []
+    pipe = r.pipeline()
     for sid in session_ids:
-        data = r.hgetall(f"session:{sid}")
+        pipe.hgetall(f"session:{sid}")
+    sessions = []
+    for sid, data in zip(session_ids, pipe.execute()):
         if data:
             data["id"] = int(sid)
             sessions.append(_to_dict(data, int_fields=["id"]))
@@ -825,9 +911,13 @@ def get_handoffs_since(since_iso: str) -> list[dict]:
     r = _r()
     since_ts = _ts(since_iso)
     handoff_ids = r.zrangebyscore("handoffs:all", since_ts, "+inf")
-    handoffs = []
+    if not handoff_ids:
+        return []
+    pipe = r.pipeline()
     for hid in handoff_ids:
-        data = r.hgetall(f"handoff:{hid}")
+        pipe.hgetall(f"handoff:{hid}")
+    handoffs = []
+    for hid, data in zip(handoff_ids, pipe.execute()):
         if data:
             data["id"] = int(hid)
             handoffs.append(_to_dict(data, int_fields=["id"]))
@@ -837,9 +927,13 @@ def get_handoffs_since(since_iso: str) -> list[dict]:
 def list_recent_handoffs(limit: int = 50) -> list[dict]:
     r = _r()
     handoff_ids = r.zrevrange("handoffs:all", 0, max(limit - 1, 0))
-    handoffs = []
+    if not handoff_ids:
+        return []
+    pipe = r.pipeline()
     for hid in handoff_ids:
-        data = r.hgetall(f"handoff:{hid}")
+        pipe.hgetall(f"handoff:{hid}")
+    handoffs = []
+    for hid, data in zip(handoff_ids, pipe.execute()):
         if data:
             data["id"] = int(hid)
             handoffs.append(_to_dict(data, int_fields=["id"]))

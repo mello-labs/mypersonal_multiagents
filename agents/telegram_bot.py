@@ -229,9 +229,7 @@ def _set_offset(offset: int) -> None:
 def run() -> None:
     if not TELEGRAM_BOT_TOKEN:
         notifier.error("TELEGRAM_BOT_TOKEN não configurada — bot não inicia.", AGENT_NAME)
-        # No Railway worker, sair com erro trava restart loop — melhor dormir passivo
-        while True:
-            time.sleep(60)
+        raise SystemExit(1)
 
     try:
         me = _api("getMe")
