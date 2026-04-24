@@ -435,6 +435,54 @@ def _run_differential_sync() -> None:
         notifier.warning(f"Erro no auto-sync diferencial: {e}", AGENT_NAME)
 
 
+_ecosystem_lock = threading.Lock()
+_github_lock = threading.Lock()
+_retrospective_lock = threading.Lock()
+
+
+def _fire_and_forget(fn, lock: threading.Lock, name: str) -> None:
+    """Dispara fn em thread daemon com lock anti-overlap."""
+    if not lock.acquire(blocking=False):
+        notifier.info(f"{name} ainda em execução — pulando rodada.", AGENT_NAME)
+        return
+
+    def _run():
+        try:
+            fn()
+        except Exception as e:
+            notifier.warning(f"Erro em {name}: {e}", AGENT_NAME)
+        finally:
+            lock.release()
+
+    threading.Thread(target=_run, name=name, daemon=True).start()
+
+
+def _run_ecosystem_check() -> None:
+    def _do():
+        from agents import ecosystem_monitor as _eco
+        _eco.run()
+    _fire_and_forget(_do, _ecosystem_lock, "ecosystem_monitor")
+
+
+def _run_github_sync() -> None:
+    from config import NOTION_TOKEN, GITHUB_TOKEN
+    if not NOTION_TOKEN or not GITHUB_TOKEN:
+        notifier.info("github_sync ignorado: NOTION_TOKEN ou GITHUB_TOKEN ausente.", AGENT_NAME)
+        return
+
+    def _do():
+        from agents import github_projects as _gh
+        _gh.sync_all_orgs(dry_run=False)
+    _fire_and_forget(_do, _github_lock, "github_projects")
+
+
+def _run_retrospective() -> None:
+    def _do():
+        from agents import retrospective as _retro
+        _retro.run_retrospective(push_to_notion=True)
+    _fire_and_forget(_do, _retrospective_lock, "retrospective")
+
+
 def _background_loop() -> None:
     """Thread principal do Focus Guard — roda o scheduler.run_pending() em loop."""
     # Lê configuração do Sanity; cai nos valores de env/config.py se indisponível
@@ -457,6 +505,15 @@ def _background_loop() -> None:
 
     # Configura sync diferencial periódico
     schedule.every(NOTION_SYNC_INTERVAL_MINUTES).minutes.do(_run_differential_sync)
+
+    # Ecosystem: health check a cada 60 min
+    schedule.every(60).minutes.do(_run_ecosystem_check)
+
+    # GitHub Projects: sync a cada 30 min (fire-and-forget, com guard de pré-requisitos)
+    schedule.every(30).minutes.do(_run_github_sync)
+
+    # Retrospective: semanalmente às 21h, toda segunda-feira
+    schedule.every().monday.at("21:00").do(_run_retrospective)
 
     # Executa uma verificação imediata ao iniciar (protegida contra falha de Redis)
     try:
