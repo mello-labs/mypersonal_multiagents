@@ -26,6 +26,7 @@ from fastapi import FastAPI, Form, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.gzip import GZipMiddleware
 
 from agents import calendar_sync, focus_guard, notion_sync, orchestrator
 from agents.persona_manager import get_persona, list_personas, set_active_persona
@@ -60,6 +61,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Multiagentes", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
