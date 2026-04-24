@@ -1,7 +1,7 @@
 # Roadmap — Sistema de Multiagentes para Gestão Pessoal
 
-**Atualizado em:** 30/03/2026
-**Estado atual:** v0.3 — Fase 2 operacional (Web UI + 10 agentes + Redis + Notion como origem principal + Google Calendar opcional + Sanity)
+**Atualizado em:** 24/04/2026
+**Estado atual:** v0.5.1 — Fase 4 operacional (OpenAI Agents SDK + ChromaDB + OpenTelemetry + Redis Streams + Sprints Vida/Ecossistema + Sanity completo + UI renovada + Docker + K8s)
 
 ---
 
