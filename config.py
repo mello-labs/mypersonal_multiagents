@@ -109,6 +109,29 @@ GOOGLE_TOKEN_FILE: str = os.getenv("GOOGLE_TOKEN_FILE", str(BASE_DIR / "token.js
 GOOGLE_CALENDAR_ID: str = os.getenv("GOOGLE_CALENDAR_ID", "primary")
 
 # ---------------------------------------------------------------------------
+# Railway (ecosystem monitor)
+# ---------------------------------------------------------------------------
+RAILWAY_TOKEN: str = os.getenv("RAILWAY_TOKEN", "")
+RAILWAY_WORKSPACE_ID: str = os.getenv("RAILWAY_WORKSPACE_ID", "")
+
+# ---------------------------------------------------------------------------
+# Life Guard (rotinas pessoais)
+# ---------------------------------------------------------------------------
+LIFE_GUARD_WATER_INTERVAL: int = int(os.getenv("LIFE_GUARD_WATER_INTERVAL", "90"))
+LIFE_GUARD_ACTIVE_HOUR_START: int = int(os.getenv("LIFE_GUARD_ACTIVE_HOUR_START", "8"))
+LIFE_GUARD_ACTIVE_HOUR_END: int = int(os.getenv("LIFE_GUARD_ACTIVE_HOUR_END", "22"))
+
+# ---------------------------------------------------------------------------
+# GitHub Projects — Notion field mappings (configurável se o schema mudar)
+# ---------------------------------------------------------------------------
+GITHUB_NOTION_STATUS_OPEN: str = os.getenv("GITHUB_NOTION_STATUS_OPEN", "📋 Backlog")
+GITHUB_NOTION_STATUS_CLOSED: str = os.getenv("GITHUB_NOTION_STATUS_CLOSED", "✅ Concluído")
+GITHUB_NOTION_PRIORITY_DEFAULT: str = os.getenv("GITHUB_NOTION_PRIORITY_DEFAULT", "⚡ Média")
+NEOMELLO_WORKSPACES_ROOT: str = os.getenv(
+    "NEOMELLO_WORKSPACES_ROOT", "/Users/nettomello/neomello"
+)
+
+# ---------------------------------------------------------------------------
 # Web
 # ---------------------------------------------------------------------------
 WEB_HOST: str = os.getenv("WEB_HOST", "127.0.0.1")

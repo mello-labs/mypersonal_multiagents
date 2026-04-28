@@ -20,7 +20,6 @@ from datetime import datetime
 from typing import Optional
 
 # Garante que o diretório raiz está no sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Importa os agentes especialistas
 from agents import (  # noqa: E402
@@ -39,7 +38,7 @@ from agents.persona_manager import (  # noqa: E402
     get_system_prompt,
     get_temperature,
 )
-from core import memory, notifier, sanity_client  # noqa: E402
+from core import memory, notifier  # noqa: E402
 from core.openai_utils import chat_completions  # noqa: E402
 
 AGENT_NAME = "orchestrator"
@@ -182,12 +181,12 @@ DIRECT_RESPONSE_PROMPT = _DIRECT_BASE
 
 
 def _get_routing_prompt() -> str:
-    return sanity_client.get_prompt("orchestrator", "routing", _ROUTING_PROMPT_FALLBACK)
+    return _ROUTING_PROMPT_FALLBACK
 
 
 def _build_synthesis_prompt(persona_id: Optional[str] = None) -> str:
     """Compõe o prompt de síntese com a persona ativa."""
-    base_prompt = sanity_client.get_prompt("orchestrator", "synthesis", _SYNTHESIS_BASE)
+    base_prompt = _SYNTHESIS_BASE
     persona_override = get_synthesis_prompt(persona_id)
     if persona_override:
         return f"{base_prompt}\n\nEstilo de resposta:\n{persona_override}"
@@ -196,7 +195,7 @@ def _build_synthesis_prompt(persona_id: Optional[str] = None) -> str:
 
 def _build_direct_prompt(persona_id: Optional[str] = None) -> str:
     """Compõe o prompt de resposta direta com a persona ativa."""
-    base_prompt = sanity_client.get_prompt("orchestrator", "direct", _DIRECT_BASE)
+    base_prompt = _DIRECT_BASE
     persona_override = get_direct_prompt(persona_id)
     if persona_override:
         return f"{base_prompt}\n\nEstilo de resposta:\n{persona_override}"

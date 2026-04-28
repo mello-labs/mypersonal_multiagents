@@ -12,13 +12,15 @@ Não julga. Apenas registra e lembra.
 """
 
 import json
-import os
 import sys
 from datetime import date, datetime, timedelta
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from core import memory, notifier, sanity_client
+from config import (
+    LIFE_GUARD_ACTIVE_HOUR_END,
+    LIFE_GUARD_ACTIVE_HOUR_START,
+    LIFE_GUARD_WATER_INTERVAL,
+)
+from core import memory, notifier
 
 AGENT_NAME = "life_guard"
 
@@ -61,9 +63,9 @@ DAILY_ROUTINES = [
     },
 ]
 
-WATER_INTERVAL_MINUTES = int(os.getenv("LIFE_GUARD_WATER_INTERVAL", "90"))
-ACTIVE_HOUR_START = int(os.getenv("LIFE_GUARD_ACTIVE_HOUR_START", "8"))
-ACTIVE_HOUR_END = int(os.getenv("LIFE_GUARD_ACTIVE_HOUR_END", "22"))
+WATER_INTERVAL_MINUTES = LIFE_GUARD_WATER_INTERVAL
+ACTIVE_HOUR_START = LIFE_GUARD_ACTIVE_HOUR_START
+ACTIVE_HOUR_END = LIFE_GUARD_ACTIVE_HOUR_END
 
 
 # ---------------------------------------------------------------------------
@@ -181,12 +183,6 @@ def check_finances() -> list:
 
 def run_all_checks() -> dict:
     """Entry point para o loop de background."""
-    if not sanity_client.is_agent_enabled(AGENT_NAME, default=True):
-        notifier.info(
-            "Life Guard desabilitado via Sanity (agent_config.enabled=false).",
-            AGENT_NAME,
-        )
-        return {"routines": [], "hydration": {}, "finances": []}
     return {
         "routines": check_daily_routines(),
         "hydration": check_hydration(),

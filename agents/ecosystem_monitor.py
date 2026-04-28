@@ -19,7 +19,6 @@ Não faz:
 
 from __future__ import annotations
 
-import os
 import time
 import json
 import datetime
@@ -27,15 +26,10 @@ import requests
 import redis
 from typing import Any
 
+from config import GITHUB_TOKEN, RAILWAY_TOKEN, RAILWAY_WORKSPACE_ID
 from core import memory, notifier
 
 AGENT_NAME = "ecosystem_monitor"
-
-# ─── Configuração ────────────────────────────────────────────────────────────
-
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-RAILWAY_TOKEN = os.getenv("RAILWAY_TOKEN", "")
-RAILWAY_WORKSPACE_ID = os.getenv("RAILWAY_WORKSPACE_ID", "")
 
 GITHUB_ORGS = [
     "NEO-PROTOCOL",

@@ -8,14 +8,11 @@
 #   from agents.persona_manager import get_persona, list_personas, set_active_persona
 
 import json
-import os
-import sys
 from pathlib import Path
 from typing import Optional
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import memory, notifier, sanity_client
+from core import memory, notifier
 
 _PERSONAS_DIR = Path(__file__).parent.parent / "personas"
 _DEFAULT_PERSONA_ID = "coordinator"
@@ -73,32 +70,12 @@ def _load_personas_from_disk() -> dict[str, dict]:
     return personas
 
 
-def _load_personas_from_sanity() -> dict[str, dict]:
-    personas: dict[str, dict] = {}
-    for item in sanity_client.get_all_personas():
-        if not isinstance(item, dict):
-            continue
-        pid = (
-            item.get("persona_id", {}).get("current")
-            or item.get("persona_id")
-            or item.get("id")
-            or item.get("_id")
-        )
-        if not pid:
-            continue
-        personas[pid] = _normalize_persona(item, pid)
-    return personas
-
-
 def _load_personas() -> None:
-    """Carrega personas com Sanity como fonte primária e disco como fallback."""
+    """Carrega personas do disco."""
     global _personas
     disk_personas = _load_personas_from_disk()
-    sanity_personas = _load_personas_from_sanity()
-    merged = dict(disk_personas)
-    merged.update(sanity_personas)
     _personas.clear()
-    _personas.update(merged)
+    _personas.update(disk_personas)
     global _active_persona_id
     # Restaura a persona ativa do Redis (sobrevive a restarts do servidor)
     try:
@@ -121,8 +98,7 @@ def _ensure_loaded() -> None:
 
 
 def reload_personas() -> None:
-    """Força recarga das personas do Sanity e do disco."""
-    sanity_client.invalidate_cache()
+    """Força recarga das personas do disco."""
     _load_personas()
 
 

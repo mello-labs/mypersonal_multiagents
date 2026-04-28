@@ -18,27 +18,14 @@
 #     - Tarefa vinculada (relation → Tarefas)
 #     - Concluído     (checkbox)
 
-import os
 import re
-import sys
 import hashlib
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
-import requests
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from adapters.notion import request as _request
 from config import (
     NOTION_AGENDA_DB_ID,
-    NOTION_API_BASE,
-    NOTION_API_VERSION,
     NOTION_TASKS_DB_ID,
     NOTION_TOKEN,
 )
@@ -63,52 +50,6 @@ _AGENDA_NAME_FIELD = "Name"            # título da página (title)
 _AGENDA_DATE_FIELD = "Data de entrega" # data de entrega (date)
 _AGENDA_RELATION_FIELD = "Tarefa vinculada"  # relation → Tarefas
 _AGENDA_DONE_FIELD = "Concluído"       # checkbox
-
-
-# ---------------------------------------------------------------------------
-# Cliente HTTP base
-# ---------------------------------------------------------------------------
-
-
-def _headers() -> dict:
-    """Retorna os headers padrão para chamadas à Notion API."""
-    return {
-        "Authorization": f"Bearer {NOTION_TOKEN}",
-        "Content-Type": "application/json",
-        "Notion-Version": NOTION_API_VERSION,
-    }
-
-
-class _NotionRateLimitError(RuntimeError):
-    """Levantada em 429 ou 5xx — elegível para retry automático."""
-
-
-@retry(
-    retry=retry_if_exception_type(_NotionRateLimitError),
-    wait=wait_exponential(multiplier=1, min=1, max=30),
-    stop=stop_after_attempt(4),
-    reraise=True,
-)
-def _request(method: str, endpoint: str, data: Optional[dict] = None) -> dict:
-    """
-    Faz uma requisição à Notion API.
-    Faz retry automático em 429 (rate limit) e 5xx com backoff exponencial (1s→2s→4s→30s).
-    Levanta RuntimeError em caso de falha não-recuperável.
-    """
-    url = f"{NOTION_API_BASE}/{endpoint.lstrip('/')}"
-    response = requests.request(method, url, headers=_headers(), json=data, timeout=15)
-
-    if response.status_code == 429 or response.status_code >= 500:
-        raise _NotionRateLimitError(
-            f"Notion API erro {response.status_code} em {method} {endpoint}: {response.text[:200]}"
-        )
-
-    if not response.ok:
-        raise RuntimeError(
-            f"Notion API erro {response.status_code} em {method} {endpoint}: {response.text[:500]}"
-        )
-
-    return response.json()
 
 
 # ---------------------------------------------------------------------------

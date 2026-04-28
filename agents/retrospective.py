@@ -5,16 +5,14 @@
 # Opcionalmente cria página no Notion com os resultados.
 
 import json
-import sys
 import os
 from datetime import datetime, timedelta
 from typing import Optional
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agents import notion_sync as _notion_sync
 from config import NOTION_RETROSPECTIVE_PAGE_ID
-from core import memory, notifier, sanity_client
+from core import memory, notifier
 from core.openai_utils import chat_completions
 
 AGENT_NAME = "retrospective"
@@ -33,11 +31,7 @@ Responda em markdown formatado."""
 
 
 def _get_retrospective_prompt() -> str:
-    return sanity_client.get_prompt(
-        "retrospective",
-        "retrospective",
-        _RETROSPECTIVE_PROMPT_FALLBACK,
-    )
+    return _RETROSPECTIVE_PROMPT_FALLBACK
 
 
 # ---------------------------------------------------------------------------

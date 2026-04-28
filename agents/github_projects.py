@@ -9,19 +9,20 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-import sys
 from pathlib import Path
 from typing import Any, Optional
 
 import requests
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import (  # noqa: E402
+    GITHUB_NOTION_PRIORITY_DEFAULT,
+    GITHUB_NOTION_STATUS_CLOSED,
+    GITHUB_NOTION_STATUS_OPEN,
     GITHUB_PROJECTS,
     GITHUB_TOKEN,
+    NEOMELLO_WORKSPACES_ROOT,
     NOTION_API_BASE,
     NOTION_API_VERSION,
     NOTION_DB_TAREFAS,
@@ -36,15 +37,11 @@ GITHUB_GRAPHQL = "https://api.github.com/graphql"
 STATE_MAP_KEY = "github_projects:issue_notion_map"
 
 # Selects do DB "Tarefas & Ações" (NEØ Command Center) — ajuste via env se o Notion mudar
-_STATUS_OPEN = os.getenv("GITHUB_NOTION_STATUS_OPEN", "📋 Backlog")
-_STATUS_CLOSED = os.getenv("GITHUB_NOTION_STATUS_CLOSED", "✅ Concluído")
-_PRIORITY_DEFAULT = os.getenv("GITHUB_NOTION_PRIORITY_DEFAULT", "⚡ Média")
+_STATUS_OPEN = GITHUB_NOTION_STATUS_OPEN
+_STATUS_CLOSED = GITHUB_NOTION_STATUS_CLOSED
+_PRIORITY_DEFAULT = GITHUB_NOTION_PRIORITY_DEFAULT
 
 # Raiz dos workspaces locais (manifests). Vazio = discover não escaneia disco.
-NEOMELLO_WORKSPACES_ROOT: str = os.getenv(
-    "NEOMELLO_WORKSPACES_ROOT",
-    "/Users/nettomello/neomello",
-)
 
 _URL_PROJECT = re.compile(
     r"github\.com/orgs/([^/]+)/projects/(\d+)",

@@ -16,25 +16,13 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-import requests
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from adapters.notion import request as _notion_request
 from config import (  # noqa: E402
-    NOTION_API_BASE,
-    NOTION_API_VERSION,
     NOTION_DB_DECISOES,
     NOTION_DB_INTEGRATIONS,
     NOTION_DB_PROJETOS,
@@ -79,43 +67,6 @@ CATEGORIES = {
         "label": "📋 Integrations Tracker",
     },
 }
-
-
-# ---------------------------------------------------------------------------
-# Cliente HTTP (mesmo padrão de notion_sync)
-# ---------------------------------------------------------------------------
-
-
-class _NotionRateLimitError(RuntimeError):
-    pass
-
-
-def _headers() -> dict:
-    return {
-        "Authorization": f"Bearer {NOTION_TOKEN}",
-        "Content-Type": "application/json",
-        "Notion-Version": NOTION_API_VERSION,
-    }
-
-
-@retry(
-    retry=retry_if_exception_type(_NotionRateLimitError),
-    wait=wait_exponential(multiplier=1, min=1, max=30),
-    stop=stop_after_attempt(4),
-    reraise=True,
-)
-def _notion_request(method: str, endpoint: str, data: Optional[dict] = None) -> dict:
-    url = f"{NOTION_API_BASE}/{endpoint.lstrip('/')}"
-    resp = requests.request(method, url, headers=_headers(), json=data, timeout=15)
-    if resp.status_code == 429 or resp.status_code >= 500:
-        raise _NotionRateLimitError(
-            f"Notion {resp.status_code}: {resp.text[:200]}"
-        )
-    if not resp.ok:
-        raise RuntimeError(
-            f"Notion {resp.status_code} em {method} {endpoint}: {resp.text[:500]}"
-        )
-    return resp.json()
 
 
 # ---------------------------------------------------------------------------

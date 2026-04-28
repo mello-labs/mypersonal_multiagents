@@ -19,30 +19,30 @@ def _mock_response(status_code: int, json_data: dict, text: str = "") -> MagicMo
 
 
 # =============================================================================
-# _request — retry e erros
+# adapters.notion.request — retry e erros
 # =============================================================================
 
 
 class TestRequest:
     def test_request_sucesso(self):
-        from agents.notion_sync import _request
+        from adapters.notion import request
 
         ok = _mock_response(200, {"object": "list", "results": []})
         with patch("requests.request", return_value=ok):
-            result = _request("POST", "databases/abc/query", {})
+            result = request("POST", "databases/abc/query", {})
         assert result == {"object": "list", "results": []}
 
     def test_request_erro_404_levanta_runtime_error(self):
-        from agents.notion_sync import _request
+        from adapters.notion import request
 
         not_found = _mock_response(404, {}, "object_not_found")
         with patch("requests.request", return_value=not_found):
             with pytest.raises(RuntimeError, match="404"):
-                _request("POST", "databases/abc/query", {})
+                request("POST", "databases/abc/query", {})
 
     def test_request_retry_em_429(self):
         """Deve tentar de novo em rate limit e ter sucesso na segunda tentativa."""
-        from agents.notion_sync import _request
+        from adapters.notion import request
 
         rate_limited = _mock_response(429, {}, "Too Many Requests")
         ok = _mock_response(200, {"results": []})
@@ -51,20 +51,20 @@ class TestRequest:
         with patch("requests.request", side_effect=[rate_limited, ok]):
             # tenacity faz wait_exponential, precisamos zerar o sleep
             with patch("tenacity.nap.time.sleep"):
-                result = _request("POST", "databases/abc/query", {})
+                result = request("POST", "databases/abc/query", {})
 
         assert result == {"results": []}
 
     def test_request_retry_esgotado_levanta_erro(self):
-        """Após 4 tentativas com 429, deve levantar _NotionRateLimitError."""
-        from agents.notion_sync import _NotionRateLimitError, _request
+        """Após 4 tentativas com 429, deve levantar NotionRateLimitError."""
+        from adapters.notion import NotionRateLimitError, request
 
         rate_limited = _mock_response(429, {}, "Too Many Requests")
 
         with patch("requests.request", return_value=rate_limited):
             with patch("tenacity.nap.time.sleep"):
-                with pytest.raises(_NotionRateLimitError):
-                    _request("POST", "databases/abc/query", {})
+                with pytest.raises(NotionRateLimitError):
+                    request("POST", "databases/abc/query", {})
 
 
 # =============================================================================

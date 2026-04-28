@@ -11,7 +11,6 @@
 # A thread roda como daemon e é parada por um Event.
 
 import json
-import os
 import sys
 import threading
 import time
@@ -20,7 +19,6 @@ from typing import Optional
 
 import schedule
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agents import notion_sync as _notion_sync
 from agents import scheduler as _scheduler
@@ -28,7 +26,7 @@ from config import (
     FOCUS_CHECK_INTERVAL_MINUTES,
     NOTION_SYNC_INTERVAL_MINUTES,
 )
-from core import memory, notifier, sanity_client
+from core import memory, notifier
 from core.openai_utils import chat_completions
 
 AGENT_NAME = "focus_guard"
@@ -85,9 +83,7 @@ Retorne JSON com:
 
 
 def _get_deviation_prompt() -> str:
-    return sanity_client.get_prompt(
-        "focus_guard", "deviation", _DEVIATION_PROMPT_FALLBACK
-    )
+    return _DEVIATION_PROMPT_FALLBACK
 
 
 def _get_runtime_environment() -> str:
@@ -95,25 +91,7 @@ def _get_runtime_environment() -> str:
 
 
 def _get_intervention_levels() -> list[dict]:
-    scripts = sanity_client.get_intervention_scripts(AGENT_NAME)
-    current_env = _get_runtime_environment()
-    levels = []
-    for script in scripts:
-        scope = script.get("environment_scope", "all")
-        if scope not in {"all", current_env}:
-            continue
-        levels.append(
-            {
-                "minutes": script.get("trigger_minutes"),
-                "channel": script.get("channel", "log_only"),
-                "sound": script.get("sound", False),
-                "msg": script.get("message", ""),
-                "title": script.get("title", "NEO Focus Guard"),
-            }
-        )
-
-    levels = [level for level in levels if isinstance(level.get("minutes"), int)]
-    return levels or ESCALATION_LEVELS
+    return ESCALATION_LEVELS
 
 
 # ---------------------------------------------------------------------------
@@ -485,20 +463,7 @@ def _run_retrospective() -> None:
 
 def _background_loop() -> None:
     """Thread principal do Focus Guard — roda o scheduler.run_pending() em loop."""
-    # Lê configuração do Sanity; cai nos valores de env/config.py se indisponível
-    cfg = sanity_client.get_agent_config(AGENT_NAME) or {}
-    if not cfg.get("enabled", True):
-        notifier.warning(
-            "Focus Guard desabilitado via Sanity (agent_config.enabled=false). Encerrando loop.",
-            AGENT_NAME,
-        )
-        return
-    interval = int(cfg.get("check_interval_minutes") or FOCUS_CHECK_INTERVAL_MINUTES)
-    if interval != FOCUS_CHECK_INTERVAL_MINUTES:
-        notifier.info(
-            f"Intervalo de check lido do Sanity: {interval} min (env={FOCUS_CHECK_INTERVAL_MINUTES}).",
-            AGENT_NAME,
-        )
+    interval = FOCUS_CHECK_INTERVAL_MINUTES
 
     # Configura o job periódico de check de foco
     schedule.every(interval).minutes.do(_run_focus_check)

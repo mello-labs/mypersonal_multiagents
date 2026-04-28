@@ -9,13 +9,11 @@
 
 import json
 import os
-import sys
 from datetime import date, datetime, time, timedelta
 from typing import Optional
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import memory, notifier, sanity_client
+from core import memory, notifier
 from core.openai_utils import chat_completions
 
 AGENT_NAME = "scheduler"
@@ -43,7 +41,7 @@ e "warnings" (lista de avisos). Exemplo de bloco:
 
 
 def _get_system_prompt() -> str:
-    return sanity_client.get_prompt("scheduler", "scheduling", _SYSTEM_PROMPT_FALLBACK)
+    return _SYSTEM_PROMPT_FALLBACK
 
 
 # ---------------------------------------------------------------------------
@@ -243,8 +241,7 @@ def auto_reschedule_block(
         return {"status": "skipped", "reason": "Time slot inválido."}
 
     start_dt, end_dt = block_range
-    _params = sanity_client.get_agent_parameters(AGENT_NAME)
-    _min_block = int(_params.get("minimum_block_minutes") or 25)
+    _min_block = 25
     duration_minutes = max(int((end_dt - start_dt).total_seconds() / 60), _min_block)
     now_dt = reference_time or datetime.now()
     same_day_blocks = memory.get_agenda_for_date(block_date)
