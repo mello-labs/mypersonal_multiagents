@@ -21,7 +21,7 @@ import signal
 import logging
 
 # Garante que o projeto está no path independente de onde o script é chamado
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 from core import memory  # noqa: E402

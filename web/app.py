@@ -86,7 +86,6 @@ from web.views import (
     _safe,
     build_agenda_blocks as _build_agenda_blocks,
     build_agenda_history_ctx as _agenda_history_ctx,
-    build_audit_ctx as _build_audit_ctx,
     build_ecosystem_ctx as _ecosystem_ctx,
     build_summary_ctx,
     build_task_views as _build_task_views,

@@ -282,7 +282,8 @@ def cmd_demo() -> None:
     notifier.separator("MODO DEMO")
     notifier.info("Criando dados de demonstração...", "demo")
 
-    today = date.today().isoformat()    # Cria algumas tarefas de exemplo
+    # Cria algumas tarefas de exemplo
+    today = date.today().isoformat()
     tasks = [
         {
             "title": "Revisar Pull Requests",
