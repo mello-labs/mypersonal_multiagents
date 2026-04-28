@@ -30,8 +30,8 @@ if [[ ! -f "$PYTHON" ]]; then
     exit 1
 fi
 
-if [[ ! -f "$PROJECT/focus_guard_service.py" ]]; then
-    echo "ERRO: focus_guard_service.py não encontrado em $PROJECT"
+if [[ ! -f "$PROJECT/scripts/focus_guard_service.py" ]]; then
+    echo "ERRO: scripts/focus_guard_service.py não encontrado em $PROJECT"
     exit 1
 fi
 

@@ -2,11 +2,11 @@
 """
 Focus Guard — serviço standalone para launchd (macOS) ou systemd (Linux).
 
-Roda o loop do Focus Guard na main thread (sem daemon thread).
+Roda o loop do background runner na main thread (sem daemon thread).
 O SO mantém o processo vivo e o reinicia automaticamente se cair.
 
 Uso direto:
-    python3 focus_guard_service.py
+    python3 scripts/focus_guard_service.py
 
 Instalar como serviço no macOS (launchd):
     bash scripts/install_launchd.sh
@@ -26,6 +26,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 from core import memory  # noqa: E402
 from agents import focus_guard  # noqa: E402
+from scheduler import runner  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,7 +38,7 @@ log = logging.getLogger(__name__)
 
 def _handle_signal(signum, frame):
     log.info(f"Sinal {signum} recebido — encerrando graciosamente...")
-    focus_guard.stop_guard()
+    runner.stop()
     sys.exit(0)
 
 
@@ -52,4 +53,5 @@ if __name__ == "__main__":
 
     # Roda o loop diretamente na main thread
     # (launchd/systemd gerenciam restart — não precisa de daemon thread)
-    focus_guard._background_loop()
+    runner._loop(focus_guard._run_focus_check)
+

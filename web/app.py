@@ -11,13 +11,11 @@ import asyncio
 import jinja2 as _jinja2
 import json
 import os
-import re
 import sys
 import threading
 import uuid
-from collections import deque
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 
@@ -84,13 +82,38 @@ async def favicon():
 _REDIS_WARN = "Redis indisponível — configure REDIS_URL no Railway."
 _NOTION_WARN = "Notion não configurado — defina NOTION_API_KEY e NOTION_DATABASE_ID."
 
+from web.views import (
+    _safe,
+    build_agenda_blocks as _build_agenda_blocks,
+    build_agenda_history_ctx as _agenda_history_ctx,
+    build_audit_ctx as _build_audit_ctx,
+    build_ecosystem_ctx as _ecosystem_ctx,
+    build_summary_ctx,
+    build_task_views as _build_task_views,
+    load_ecosystem_data as _load_ecosystem_data,
+    normalize_range as _normalize_range,
+)
 
-def _safe(fn, fallback):
-    """Executa fn(); retorna fallback se qualquer exceção ocorrer."""
-    try:
-        return fn()
-    except Exception:
-        return fallback
+
+def _tail_logs(limit: int = 120) -> list[str]:
+    """Lê as últimas `limit` linhas de LOG_FILE (referencia o binding local de app.py)."""
+    from collections import deque
+    from pathlib import Path as _Path
+    log_path = _Path(LOG_FILE)
+    if not log_path.exists():
+        return []
+    with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+        return list(deque(handle, maxlen=limit))
+
+
+def _audit_ctx() -> dict:
+    return {
+        "summary": build_summary_ctx()["summary"],
+        "audit_events": _safe(lambda: memory.list_audit_events(60), []),
+        "alerts": _safe(lambda: memory.list_alerts(30), []),
+        "handoffs": _safe(lambda: memory.list_recent_handoffs(30), []),
+        "log_lines": _tail_logs(120),
+    }
 
 
 async def _safe_async(coro, fallback):
@@ -117,374 +140,12 @@ def _persona_ctx(request: Request) -> dict:
     }
 
 
-def _parse_slot_range(block_date: str | None, time_slot: str | None):
-    """Converte 'YYYY-MM-DD' + '09:00-10:00' em datetimes comparáveis."""
-    if not block_date or not time_slot or "-" not in time_slot:
-        return None
-    try:
-        start_str, end_str = [part.strip() for part in time_slot.split("-", 1)]
-        start_dt = datetime.strptime(f"{block_date} {start_str}", "%Y-%m-%d %H:%M")
-        end_dt = datetime.strptime(f"{block_date} {end_str}", "%Y-%m-%d %H:%M")
-        if end_dt <= start_dt:
-            return None
-        return start_dt, end_dt
-    except ValueError:
-        return None
-
-
-def _format_slot_label(
-    block_date: str | None, time_slot: str | None, today: date
-) -> str:
-    """Formata label de um bloco de agenda para exibição nas listas de tarefas."""
-    tomorrow = today + timedelta(days=1)
-
-    try:
-        block_day = datetime.strptime(block_date, "%Y-%m-%d").date() if block_date else None
-    except ValueError:
-        block_day = None
-
-    if block_day:
-        if block_day == today:
-            day_label = "Hoje"
-        elif block_day == tomorrow:
-            day_label = "Amanhã"
-        elif block_day < today:
-            day_label = f"{block_day.strftime('%d/%m')} (vencida)"
-        else:
-            day_label = block_day.strftime("%d/%m")
-    else:
-        day_label = ""
-
-    if time_slot:
-        return f"{day_label} · {time_slot}" if day_label else time_slot
-
-    # Bloco date-only (sem horário)
-    return day_label if day_label else ""
-
-
-_HHMM_RE = re.compile(r"(\d{1,2}):(\d{2})")
-_DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
-
-
-def _format_scheduled_time(scheduled_time: str | None, today: date) -> str:
-    """
-    Formata scheduled_time de forma legível para o front.
-    Exemplos:
-      "2026-04-07 14:00" → "Hoje · 14:00"
-      "2026-04-08"       → "Para amanhã"
-      "2026-04-10"       → "Para 10/04"
-      "09:00"            → "Hoje · 09:00"
-    Retorna "" se vazio.
-    """
-    raw = (scheduled_time or "").strip()
-    if not raw:
-        return ""
-
-    date_match = _DATE_RE.search(raw)
-    hhmm_match = _HHMM_RE.search(raw)
-
-    block_date = None
-    if date_match:
-        try:
-            block_date = datetime.strptime(date_match.group(0), "%Y-%m-%d").date()
-        except ValueError:
-            pass
-
-    hhmm_str = ""
-    if hhmm_match:
-        h, m = hhmm_match.groups()
-        try:
-            hhmm_str = f"{int(h):02d}:{m}"
-        except ValueError:
-            pass
-
-    if block_date:
-        tomorrow = today + timedelta(days=1)
-        if block_date == today:
-            day_label = "Hoje"
-        elif block_date == tomorrow:
-            day_label = "Amanhã"
-        elif block_date < today:
-            day_label = f"{block_date.strftime('%d/%m')} (vencida)"
-        else:
-            day_label = block_date.strftime("%d/%m")
-
-        if hhmm_str:
-            return f"{day_label} · {hhmm_str}"
-        return f"Para {day_label}"
-
-    if hhmm_str:
-        return f"Hoje · {hhmm_str}"
-
-    return raw
-
-
-def _build_task_views(include_completed: bool = True) -> tuple[list[dict], dict]:
-    """Cria uma leitura temporal das tarefas para o frontend."""
-    now = datetime.now()
-    today = now.date()
-    priority_rank = {"Alta": 0, "Média": 1, "Media": 1, "Baixa": 2}
-    tasks = _safe(memory.list_all_tasks, [])
-    task_ids = [task["id"] for task in tasks]
-    blocks_by_task = _safe(
-        lambda: memory.get_agenda_blocks_for_tasks(task_ids),
-        {task_id: [] for task_id in task_ids},
-    )
-    task_views = []
-
-    for task in tasks:
-        view = dict(task)
-        blocks = blocks_by_task.get(task["id"], [])
-        open_blocks = [
-            block
-            for block in blocks
-            if not block.get("completed") and not block.get("rescheduled")
-        ]
-
-        overdue_blocks = []
-        for block in open_blocks:
-            slot_range = _parse_slot_range(
-                block.get("block_date"), block.get("time_slot")
-            )
-            if slot_range:
-                _, end_dt = slot_range
-                if end_dt < now:
-                    overdue_blocks.append(block)
-                continue
-            if (block.get("block_date") or "") < today.isoformat():
-                overdue_blocks.append(block)
-
-        open_blocks.sort(
-            key=lambda block: (
-                block.get("block_date") or "9999-99-99",
-                block.get("time_slot") or "99:99-99:99",
-            )
-        )
-        overdue_blocks.sort(
-            key=lambda block: (
-                block.get("block_date") or "9999-99-99",
-                block.get("time_slot") or "99:99-99:99",
-            )
-        )
-
-        next_block = open_blocks[0] if open_blocks else None
-        overdue_block = overdue_blocks[0] if overdue_blocks else None
-        original_status = task.get("status") or "A fazer"
-
-        if original_status == "Concluído":
-            display_status = "Concluído"
-            status_class = "badge-ok"
-            meta = (
-                f"Concluída às {task.get('actual_time')}"
-                if task.get("actual_time")
-                else "Concluída"
-            )
-        elif overdue_block:
-            display_status = "Pendente"
-            status_class = "badge-warn"
-            meta = f"Bloco vencido · {_format_slot_label(overdue_block.get('block_date'), overdue_block.get('time_slot'), today)}"
-        elif original_status == "Em progresso":
-            display_status = "Em progresso"
-            status_class = "badge-def"
-            meta = (
-                _format_slot_label(
-                    next_block.get("block_date"),
-                    next_block.get("time_slot"),
-                    today,
-                )
-                if next_block
-                else (
-                    _format_scheduled_time(task.get("scheduled_time"), today)
-                    or "Sem bloco associado"
-                )
-            )
-        else:
-            display_status = "A fazer"
-            status_class = "badge-def"
-            meta = (
-                _format_slot_label(
-                    next_block.get("block_date"),
-                    next_block.get("time_slot"),
-                    today,
-                )
-                if next_block
-                else (
-                    _format_scheduled_time(task.get("scheduled_time"), today)
-                    or "Sem horário definido"
-                )
-            )
-
-        # True quando a meta é um horário/data agendado (azul),
-        # False quando é um aviso operacional (branco/laranja)
-        meta_is_schedule = (
-            not overdue_block
-            and original_status not in ("Concluído",)
-            and bool(meta)
-            and not meta.startswith("Bloco vencido")
-            and not meta.startswith("Sem")
-        )
-        view.update(
-            {
-                "display_status": display_status,
-                "display_status_class": status_class,
-                "display_meta": meta,
-                "display_meta_is_date": meta_is_schedule,
-                "is_overdue": bool(overdue_block),
-            }
-        )
-        task_views.append(view)
-
-    if not include_completed:
-        task_views = [
-            task for task in task_views if task["display_status"] != "Concluído"
-        ]
-
-    status_rank = {"Pendente": 0, "Em progresso": 1, "A fazer": 2, "Concluído": 3}
-    task_views.sort(
-        key=lambda task: (
-            status_rank.get(task.get("display_status", "A fazer"), 4),
-            priority_rank.get(task.get("priority", "Média"), 1),
-            task.get("scheduled_time") or "99:99",
-            -(task.get("id") or 0),
-        )
-    )
-
-    overview = {
-        "pending_count": sum(
-            1
-            for task in task_views
-            if task["display_status"] in {"Pendente", "A fazer"}
-        ),
-        "overdue_count": sum(
-            1 for task in task_views if task["display_status"] == "Pendente"
-        ),
-        "in_progress_count": sum(
-            1 for task in task_views if task["display_status"] == "Em progresso"
-        ),
-        "done_count": sum(
-            1 for task in task_views if task["display_status"] == "Concluído"
-        ),
-    }
-    return task_views, overview
-
-
-def _build_agenda_blocks(include_rescheduled: bool = False) -> list[dict]:
-    now = datetime.now()
-    today = now.date()
-    blocks = _safe(
-        lambda: memory.get_today_agenda(include_rescheduled=include_rescheduled),
-        [],
-    )
-    block_views = []
-    for block in blocks:
-        view = dict(block)
-        slot_range = _parse_slot_range(view.get("block_date"), view.get("time_slot"))
-        is_overdue = False
-        if not view.get("completed") and not view.get("rescheduled"):
-            if slot_range:
-                _, end_dt = slot_range
-                is_overdue = end_dt < now
-            elif (view.get("block_date") or "") < today.isoformat():
-                is_overdue = True
-
-        if view.get("completed"):
-            state_label = "Concluído"
-            state_class = "badge-ok"
-        elif view.get("rescheduled"):
-            state_label = "Reagendado"
-            state_class = "badge-warn"
-        elif is_overdue:
-            state_label = "Pendente"
-            state_class = "badge-warn"
-        else:
-            state_label = "Aberto"
-            state_class = "badge-def"
-
-        view.update(
-            {
-                "display_state_label": state_label,
-                "display_state_class": state_class,
-                "is_overdue": is_overdue,
-            }
-        )
-        block_views.append(view)
-    return block_views
-
-
 def _summary_ctx(request: Request = None, include_completed: bool = False) -> dict:
     """Contexto de resumo do sistema — nunca lança exceção."""
-    summary = _safe(
-        orchestrator.get_system_summary,
-        {
-            "tasks": {"a_fazer": 0, "em_progresso": 0, "concluido": 0},
-            "focus": {"guard_running": focus_guard.is_running(), "on_track": True},
-            "agenda_today": {"total_blocks": 0, "completed": 0},
-            "alerts": {"pending": 0},
-            "redis_ok": False,
-        },
-    )
-    _, task_overview = _build_task_views(include_completed=include_completed)
-    ctx = {"summary": summary, "task_overview": task_overview}
+    ctx = build_summary_ctx(include_completed=include_completed)
     if request:
         ctx.update(_persona_ctx(request))
     return ctx
-
-
-def _tail_logs(limit: int = 120) -> list[str]:
-    log_path = Path(LOG_FILE)
-    if not log_path.exists():
-        return []
-    with log_path.open("r", encoding="utf-8", errors="replace") as handle:
-        return list(deque(handle, maxlen=limit))
-
-
-def _audit_ctx() -> dict:
-    return {
-        "summary": _summary_ctx()["summary"],
-        "audit_events": _safe(lambda: memory.list_audit_events(60), []),
-        "alerts": _safe(lambda: memory.list_alerts(30), []),
-        "handoffs": _safe(lambda: memory.list_recent_handoffs(30), []),
-        "log_lines": _tail_logs(120),
-    }
-
-
-def _normalize_range(start_date: str | None, end_date: str | None) -> tuple[str, str]:
-    today = date.today()
-    default_start = today - timedelta(days=7)
-    default_end = today + timedelta(days=7)
-    try:
-        start_dt = (
-            datetime.strptime(start_date, "%Y-%m-%d").date()
-            if start_date
-            else default_start
-        )
-        end_dt = (
-            datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else default_end
-        )
-    except ValueError:
-        return default_start.isoformat(), default_end.isoformat()
-
-    if end_dt < start_dt:
-        start_dt, end_dt = end_dt, start_dt
-    return start_dt.isoformat(), end_dt.isoformat()
-
-
-def _agenda_history_ctx(start_date: str | None, end_date: str | None) -> dict:
-    normalized_start, normalized_end = _normalize_range(start_date, end_date)
-    blocks = _safe(
-        lambda: memory.list_agenda_between(
-            normalized_start,
-            normalized_end,
-            include_rescheduled=True,
-        ),
-        [],
-    )
-    return {
-        "summary": _summary_ctx()["summary"],
-        "blocks": blocks,
-        "start_date": normalized_start,
-        "end_date": normalized_end,
-    }
 
 
 def _is_https(request: Request) -> bool:
@@ -910,114 +571,6 @@ async def switch_persona(request: Request, persona_id: str):
         max_age=60 * 60 * 24 * 365,
     )
     return response
-
-
-# ---------------------------------------------------------------------------
-# Ecosystem
-# ---------------------------------------------------------------------------
-
-
-def _ecosystem_ctx(data: dict) -> dict:
-    """Converte dados do health_check em contexto para o template."""
-    import datetime as _dt
-
-    summary = data.get("summary", {})
-    github = data.get("github", {})
-    railway = data.get("railway", {})
-    onchain = data.get("onchain", {})
-
-    # Railway services list
-    railway_services = []
-    for name, info in railway.items():
-        railway_services.append(
-            {
-                "name": name,
-                "status": info.get("status", "dim"),
-                "http_code": info.get("http_code"),
-                "response_ms": info.get("response_ms"),
-                "error": info.get("error"),
-                "priority": info.get("priority", "P2"),
-            }
-        )
-    # sort: fail first, then warn, then ok; P0 before P1
-    order = {"fail": 0, "warn": 1, "ok": 2, "dim": 3}
-    railway_services.sort(key=lambda s: (order.get(s["status"], 9), s["priority"]))
-
-    # GitHub orgs list
-    github_orgs = []
-    for org, info in github.items():
-        github_orgs.append(
-            {
-                "name": org,
-                "status": info.get("status", "dim"),
-                "active_24h": info.get("repos_active_24h", 0),
-                "issues": info.get("open_issues", 0),
-                "stale": info.get("repos_stale", []),
-            }
-        )
-
-    # NEOFLW
-    neoflw = onchain.get("NEOFLW", {"status": "dim"})
-
-    # Actions
-    rw_fail = [s["name"] for s in railway_services if s["status"] == "fail"]
-    rw_warn = [s["name"] for s in railway_services if s["status"] == "warn"]
-    stale = summary.get("github", {}).get("repos_stale_priority", [])
-    actions = []
-    if rw_fail:
-        actions.append(f"verificar serviço com falha: {', '.join(rw_fail)}")
-    if rw_warn:
-        actions.append(f"investigar: {', '.join(rw_warn)}")
-    if stale:
-        actions.append(
-            f"repos estagnados: {', '.join(stale[:5])}{'...' if len(stale) > 5 else ''}"
-        )
-    if neoflw.get("alerts"):
-        actions.append("monitorar NEOFLW — alertas ativos")
-
-    rw_s = summary.get("railway", {})
-    ts_raw = data.get("timestamp", "")
-    try:
-        ts = _dt.datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
-        ts_str = ts.strftime("%H:%M")
-    except Exception:
-        ts_str = ts_raw[:16]
-
-    return {
-        "global_status": data.get("status", "unknown"),
-        "timestamp": ts_str,
-        "railway_ok": rw_s.get("services_ok", 0),
-        "railway_total": rw_s.get("services_total", 0),
-        "railway_warn": rw_s.get("services_warn", 0),
-        "railway_fail": rw_s.get("services_fail", 0),
-        "repos_active": summary.get("github", {}).get("repos_active_24h", 0),
-        "railway_services": railway_services,
-        "github_orgs": github_orgs,
-        "neoflw": neoflw,
-        "actions": actions,
-    }
-
-
-def _load_ecosystem_data() -> dict:
-    """Carrega health check do Redis ou retorna estrutura vazia."""
-    try:
-        raw = memory.get_state("ecosystem:health_check:latest")
-        if isinstance(raw, dict):
-            return raw
-        if isinstance(raw, str):
-            import json
-
-            return json.loads(raw)
-    except Exception:
-        pass
-    return {
-        "status": "unknown",
-        "summary": {},
-        "github": {},
-        "railway": {},
-        "onchain": {},
-        "timestamp": "",
-    }
 
 
 @app.get("/ecosystem-page", response_class=HTMLResponse)

@@ -181,67 +181,15 @@ def agent_event(message: str, agent: str = "orchestrator") -> None:
 # Notificações nativas — macOS e Alexa
 # ---------------------------------------------------------------------------
 def mac_push(title: str, message: str, sound: bool = False) -> None:
-    """Envia notificação nativa macOS via AppleScript."""
-    import subprocess
-
-    if sys.platform != "darwin":
-        warning(
-            "mac_push ignorado: notificações nativas só funcionam em macOS.",
-            "notifier",
-        )
-        return
-
-    sound_line = ' sound name "Sosumi"' if sound else ""
-    script = f'display notification "{message}" with title "{title}"{sound_line}'
-    try:
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            timeout=5,
-        )
-        if result.returncode != 0:
-            stderr = (result.stderr or b"").decode("utf-8", errors="ignore").strip()
-            warning(
-                f"mac_push falhou via osascript (code={result.returncode}): "
-                f"{stderr or 'sem stderr'}",
-                "notifier",
-            )
-    except Exception as exc:  # pylint: disable=broad-except
-        warning(f"mac_push falhou: {exc}", "notifier")
+    """Envia notificação nativa macOS. Delegado a notifications/channels.py."""
+    from notifications.channels import mac_push as _mac_push
+    _mac_push(title, message, sound)
 
 
 def alexa_announce(message: str) -> None:
-    """Dispara anúncio na Alexa exclusivamente via Voice Monkey."""
-    import requests
-
-    vm_token = os.getenv("VOICE_MONKEY_TOKEN", "")
-    if vm_token:
-        try:
-            device = os.getenv("VOICE_MONKEY_DEVICE", "eco-room")
-            response = requests.post(
-                "https://api-v2.voicemonkey.io/announcement",
-                headers=(
-                    {"Authorization": f"Bearer {vm_token}"}
-                    if not vm_token.startswith("Bearer")
-                    else {"Authorization": vm_token}
-                ),
-                json={"device": device, "text": message},
-                timeout=5,
-            )
-            if not response.ok:
-                warning(
-                    f"Voice Monkey falhou ({response.status_code}): "
-                    f"{response.text[:160] or 'sem resposta'}",
-                    "notifier",
-                )
-        except Exception as exc:  # pylint: disable=broad-except
-            warning(f"Voice Monkey falhou: {exc}", "notifier")
-        return
-
-    warning(
-        "Alexa indisponível: configure VOICE_MONKEY_TOKEN no ambiente.",
-        "notifier",
-    )
+    """Dispara anúncio na Alexa via Voice Monkey. Delegado a notifications/channels.py."""
+    from notifications.channels import alexa_announce as _alexa_announce
+    _alexa_announce(message)
 
 
 # ---------------------------------------------------------------------------
