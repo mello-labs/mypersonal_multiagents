@@ -3,8 +3,7 @@
 # =============================================================================
 # Responsável por:
 #   - Manter o loop `schedule.run_pending()` em background thread
-#   - Registrar jobs periódicos de cada agente (notion_sync, ecosystem_monitor,
-#     github_projects, retrospective)
+#   - Registrar jobs periódicos (ecosystem_monitor, github_projects)
 #
 # O Focus Guard registra apenas o seu próprio job (_run_focus_check).
 # Cada agente é responsável apenas por executar sua própria tarefa —
@@ -21,7 +20,6 @@ import schedule
 from config import (
     FOCUS_CHECK_INTERVAL_MINUTES,
     GITHUB_TOKEN,
-    NOTION_SYNC_INTERVAL_MINUTES,
     NOTION_TOKEN,
 )
 from core import notifier
@@ -33,7 +31,6 @@ _runner_thread: threading.Thread | None = None
 
 _ecosystem_lock = threading.Lock()
 _github_lock = threading.Lock()
-_retrospective_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -63,17 +60,6 @@ def _fire_and_forget(fn, lock: threading.Lock, name: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _run_differential_sync() -> None:
-    """Sync diferencial Notion → local a cada NOTION_SYNC_INTERVAL_MINUTES minutos."""
-    try:
-        from agents import notion_sync
-        count = notion_sync.sync_differential()
-        if count:
-            notifier.info(f"Auto-sync: {count} tarefa(s) sincronizada(s).", _RUNNER_NAME)
-    except Exception as e:
-        notifier.warning(f"Erro no auto-sync diferencial: {e}", _RUNNER_NAME)
-
-
 def _run_ecosystem_check() -> None:
     """Health check do ecossistema (Railway, GitHub, on-chain) a cada 60 min."""
     def _do():
@@ -96,14 +82,6 @@ def _run_github_sync() -> None:
     _fire_and_forget(_do, _github_lock, "github_projects")
 
 
-def _run_retrospective() -> None:
-    """Retrospectiva semanal toda segunda-feira às 21h."""
-    def _do():
-        from agents import retrospective
-        retrospective.run_retrospective(push_to_notion=True)
-    _fire_and_forget(_do, _retrospective_lock, "retrospective")
-
-
 # ---------------------------------------------------------------------------
 # Loop principal
 # ---------------------------------------------------------------------------
@@ -117,10 +95,8 @@ def _loop(focus_check_fn) -> None:
         focus_check_fn: Callable do Focus Guard a chamar periodicamente.
     """
     schedule.every(FOCUS_CHECK_INTERVAL_MINUTES).minutes.do(focus_check_fn)
-    schedule.every(NOTION_SYNC_INTERVAL_MINUTES).minutes.do(_run_differential_sync)
     schedule.every(60).minutes.do(_run_ecosystem_check)
     schedule.every(30).minutes.do(_run_github_sync)
-    schedule.every().monday.at("21:00").do(_run_retrospective)
 
     # Check imediato ao iniciar
     try:

@@ -94,12 +94,6 @@ LOG_FILE: str = os.getenv("LOG_FILE", str(BASE_DIR / "logs" / "agent_system.log"
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
 # ---------------------------------------------------------------------------
-# Notion sync interval
-# ---------------------------------------------------------------------------
-NOTION_SYNC_INTERVAL_MINUTES: int = int(os.getenv("NOTION_SYNC_INTERVAL", "5"))
-NOTION_RETROSPECTIVE_PAGE_ID: str = os.getenv("NOTION_RETROSPECTIVE_PAGE_ID", "")
-
-# ---------------------------------------------------------------------------
 # Linear (captura de issues via capture_agent)
 # ---------------------------------------------------------------------------
 LINEAR_API_KEY: str = os.getenv("LINEAR_API_KEY", "")

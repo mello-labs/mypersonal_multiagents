@@ -15,7 +15,6 @@ VENV        := .venv
 BIN         := $(VENV)/bin
 PIP         := $(BIN)/pip
 PY          := $(BIN)/python
-UVICORN     := $(BIN)/uvicorn
 RUFF        := $(BIN)/ruff
 PYTEST      := $(BIN)/pytest
 PIP_AUDIT   := $(BIN)/pip-audit
@@ -78,20 +77,6 @@ commit: check security ## [NΞØ] Secure commit & push flow (The Protocol)
 # -----------------------------------------------------------------------------
 # ⧉ AGENT RUNTIME
 # -----------------------------------------------------------------------------
-
-.PHONY: dev
-dev: redis-ready ## Start Web UI locally (FastAPI + Hot Reload, local Redis)
-	@printf "$(CYAN)🚀 Launching UI at http://localhost:8000...$(RESET)\n"
-	@REDIS_URL=$(REDIS_LOCAL_URL) $(UVICORN) web.app:app --host 127.0.0.1 --port 8000 --reload
-
-.PHONY: dev-ui
-dev-ui: redis-ready ## Start Web UI with deep asset watch (local Redis)
-	@printf "$(CYAN)🎨 Launching UI with deep asset watch...$(RESET)\n"
-	@REDIS_URL=$(REDIS_LOCAL_URL) $(UVICORN) web.app:app --host 127.0.0.1 --port 8000 --reload \
-		--reload-include '*.py' \
-		--reload-include 'web/templates/**/*.html' \
-		--reload-include 'web/static/**/*.css' \
-		--reload-include 'web/static/**/*.js'
 
 .PHONY: guard
 guard: ## Start Focus Guard daemon (uses REDIS_URL from .env)
@@ -179,10 +164,6 @@ doctor: ## Deep system diagnostic
 .PHONY: logs
 logs: ## Show recent logs
 	@tail -f logs/*.log 2>/dev/null || printf "$(RED)No logs found.$(RESET)\n"
-
-.PHONY: health
-health: ## Check FastAPI /health endpoint
-	@curl -s http://localhost:8000/health | $(PYTHON) -m json.tool
 
 # -----------------------------------------------------------------------------
 # ⌬ DOCKER MAINTENANCE
