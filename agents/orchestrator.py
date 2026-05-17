@@ -13,14 +13,10 @@
 # qual combinação de agentes acionar e em que ordem.
 
 import json
-import os
 import re
-import sys
 from datetime import datetime
 from typing import Optional
 
-# Garante que o diretório raiz está no sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Importa os agentes especialistas
 from agents import (  # noqa: E402

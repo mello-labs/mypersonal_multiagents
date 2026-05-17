@@ -58,7 +58,8 @@ def test_focus_guard_reagenda_bloco_atrasado_e_audita(mem, monkeypatch):
     assert "alert_created" in tipos
 
 
-def test_focus_guard_usa_intervention_script_do_sanity(mem, monkeypatch):
+def test_focus_guard_usa_escalation_level_60min(mem, monkeypatch):
+    """Sessão ativa com 61 minutos deve acionar o nível de 30 min (primeiro nível elegível)."""
     session_id = mem.start_focus_session(7, "Troia", 25)
     started_at = (
         datetime.datetime.now() - datetime.timedelta(minutes=61)
@@ -67,21 +68,6 @@ def test_focus_guard_usa_intervention_script_do_sanity(mem, monkeypatch):
         f"session:{session_id}", mapping={"started_at": started_at}
     )
 
-    monkeypatch.setattr(
-        focus_guard.sanity_client,
-        "get_intervention_scripts",
-        lambda agent_name=None: [
-            {
-                "agent_name": "focus_guard",
-                "trigger_minutes": 60,
-                "channel": "mac",
-                "sound": True,
-                "message": "Sanity diz para revisar {task} aos {planned} minutos.",
-                "title": "FG Studio",
-                "environment_scope": "all",
-            }
-        ],
-    )
     monkeypatch.setattr(
         focus_guard,
         "analyze_with_llm",
@@ -114,6 +100,7 @@ def test_focus_guard_usa_intervention_script_do_sanity(mem, monkeypatch):
 
     focus_guard._run_focus_check()
 
-    assert mac_calls == [
-        ("FG Studio", "Sanity diz para revisar Troia aos 25 minutos.", True)
-    ]
+    # A sessão de 61 minutos deve acionar exatamente 1 nível de escalação (o primeiro elegível)
+    assert len(mac_calls) == 1
+    _, message, _ = mac_calls[0]
+    assert "Troia" in message

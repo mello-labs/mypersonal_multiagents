@@ -19,7 +19,6 @@ from typing import Any, Optional
 
 import requests
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import (  # noqa: E402
     TELEGRAM_ALLOWED_CHAT_IDS,

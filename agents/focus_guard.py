@@ -7,20 +7,15 @@
 #   3. Emite alertas/cobranças no terminal
 #   4. Registra desvios no banco de dados
 #
-# O loop principal usa a lib `schedule` para disparos periódicos.
-# A thread roda como daemon e é parada por um Event.
+# O loop de background e o agendamento dos demais agentes ficam em
+# scheduler/runner.py. Este módulo registra apenas _run_focus_check.
 
 import json
-import os
 import sys
 import threading
-import time
 from datetime import date, datetime
 from typing import Optional
 
-import schedule
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agents import scheduler as _scheduler
 from config import FOCUS_CHECK_INTERVAL_MINUTES
@@ -60,7 +55,6 @@ ESCALATION_LEVELS = [
 # Estado interno do Focus Guard
 _state_key = "focus_guard_state"
 _stop_event = threading.Event()
-_guard_thread: Optional[threading.Thread] = None
 
 
 # Prompt para análise de desvio via LLM
@@ -410,7 +404,6 @@ _github_lock = threading.Lock()
 
 
 def _fire_and_forget(fn, lock: threading.Lock, name: str) -> None:
-    """Dispara fn em thread daemon com lock anti-overlap."""
     if not lock.acquire(blocking=False):
         notifier.info(f"{name} ainda em execução — pulando rodada.", AGENT_NAME)
         return
@@ -434,7 +427,7 @@ def _run_ecosystem_check() -> None:
 
 
 def _run_github_sync() -> None:
-    from config import NOTION_TOKEN, GITHUB_TOKEN
+    from config import GITHUB_TOKEN, NOTION_TOKEN
     if not NOTION_TOKEN or not GITHUB_TOKEN:
         notifier.info("github_sync ignorado: NOTION_TOKEN ou GITHUB_TOKEN ausente.", AGENT_NAME)
         return
@@ -446,19 +439,12 @@ def _run_github_sync() -> None:
 
 
 def _background_loop() -> None:
-    """Thread principal do Focus Guard — roda o scheduler.run_pending() em loop."""
     interval = FOCUS_CHECK_INTERVAL_MINUTES
 
-    # Configura o job periódico de check de foco
     schedule.every(interval).minutes.do(_run_focus_check)
-
-    # Ecosystem: health check a cada 60 min
     schedule.every(60).minutes.do(_run_ecosystem_check)
-
-    # GitHub Projects: sync a cada 30 min (fire-and-forget, com guard de pré-requisitos)
     schedule.every(30).minutes.do(_run_github_sync)
 
-    # Executa uma verificação imediata ao iniciar (protegida contra falha de Redis)
     try:
         _run_focus_check()
     except Exception as e:
@@ -471,7 +457,7 @@ def _background_loop() -> None:
             schedule.run_pending()
         except Exception as e:
             notifier.warning(f"Erro no scheduler (ignorado): {e}", AGENT_NAME)
-        time.sleep(30)  # Polling a cada 30 segundos
+        time.sleep(30)
 
     notifier.info("Focus Guard encerrado.", AGENT_NAME)
 
@@ -480,21 +466,19 @@ def _background_loop() -> None:
 # API pública — start/stop da thread de background
 # ---------------------------------------------------------------------------
 
+_guard_thread: threading.Thread | None = None
+
 
 def start_guard() -> None:
-    """Inicia o Focus Guard em background thread (daemon)."""
+    """Inicia o Focus Guard em background thread (delegando ao scheduler/runner)."""
     global _guard_thread
-    if _guard_thread and _guard_thread.is_alive():
+    from scheduler import runner
+    if runner._runner_thread and runner._runner_thread.is_alive():
         notifier.warning("Focus Guard já está rodando.", AGENT_NAME)
         return
 
-    _stop_event.clear()
-    _guard_thread = threading.Thread(
-        target=_background_loop,
-        name="FocusGuardThread",
-        daemon=True,
-    )
-    _guard_thread.start()
+    runner.start(_run_focus_check)
+    _guard_thread = runner._runner_thread
     notifier.success(
         f"Focus Guard em background (check a cada {FOCUS_CHECK_INTERVAL_MINUTES} min).",
         AGENT_NAME,
@@ -503,14 +487,15 @@ def start_guard() -> None:
 
 def stop_guard() -> None:
     """Para o Focus Guard."""
-    _stop_event.set()
-    schedule.clear()
+    from scheduler import runner
+    runner.stop()
     notifier.info("Focus Guard parado.", AGENT_NAME)
 
 
 def is_running() -> bool:
     """Verifica se o Focus Guard está ativo."""
-    return _guard_thread is not None and _guard_thread.is_alive()
+    from scheduler import runner
+    return runner._runner_thread is not None and runner._runner_thread.is_alive()
 
 
 def force_check() -> dict:

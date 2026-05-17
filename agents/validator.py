@@ -11,16 +11,10 @@
 # uma tarefa como concluída.
 
 import json
-import os
-import sys
 from datetime import datetime
 
-# Garante que o diretório raiz está no sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Importações locais que dependem do sys.path hack acima
-from core import memory, notifier  # noqa: E402  # pylint: disable=wrong-import-position
-from core.openai_utils import chat_completions  # noqa: E402  # pylint: disable=wrong-import-position
+from core import memory, notifier
+from core.openai_utils import chat_completions
 
 AGENT_NAME = "validator"
 

@@ -9,11 +9,9 @@
 
 import json
 import os
-import sys
 from datetime import date, datetime, time, timedelta
 from typing import Optional
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core import memory, notifier
 from core.openai_utils import chat_completions

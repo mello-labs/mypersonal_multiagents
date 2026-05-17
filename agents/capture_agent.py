@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from adapters.notion import request as _notion_request
 from agents import linear_sync  # noqa: E402
+from config import (  # noqa: E402
+    NOTION_DB_DECISOES,
+    NOTION_DB_INTEGRATIONS,
+    NOTION_DB_PROJETOS,
+    NOTION_DB_TAREFAS,
+    NOTION_DB_WORKLOG,
+    NOTION_TOKEN,
+)
 from core import memory, notifier  # noqa: E402
 from core.openai_utils import chat_completions  # noqa: E402
 
@@ -27,6 +33,60 @@ CATEGORIES = {
     "PROJECT":     "📁 Projetos NEØ",
     "INTEGRATION": "📋 Integrations Tracker",
 }
+
+
+# ---------------------------------------------------------------------------
+# Property helpers
+# ---------------------------------------------------------------------------
+
+
+def _p_title(text: str) -> dict:
+    return {"title": [{"text": {"content": text[:2000]}}]}
+
+
+def _p_rich(text: str) -> dict:
+    return {"rich_text": [{"text": {"content": text[:2000]}}]}
+
+
+def _p_select(name: str) -> dict:
+    return {"select": {"name": name}}
+
+
+def _p_date(iso: str) -> dict:
+    return {"date": {"start": iso}}
+
+
+def _p_url(url: str) -> dict:
+    return {"url": url}
+
+
+def _p_relation(page_ids: list[str]) -> dict:
+    return {"relation": [{"id": pid} for pid in page_ids if pid]}
+
+
+# ---------------------------------------------------------------------------
+# Normalizadores de valores (os selects do Command Center usam emoji)
+# ---------------------------------------------------------------------------
+
+_PRIORITY_MAP = {
+    "alta": "🔥 Alta",
+    "high": "🔥 Alta",
+    "🔥 alta": "🔥 Alta",
+    "media": "⚡ Média",
+    "média": "⚡ Média",
+    "medium": "⚡ Média",
+    "⚡ média": "⚡ Média",
+    "baixa": "💤 Baixa",
+    "low": "💤 Baixa",
+    "💤 baixa": "💤 Baixa",
+}
+
+
+def _norm_priority(value: Optional[str]) -> str:
+    if not value:
+        return "⚡ Média"
+    key = str(value).strip().lower()
+    return _PRIORITY_MAP.get(key, "⚡ Média")
 
 
 # ---------------------------------------------------------------------------
