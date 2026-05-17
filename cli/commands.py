@@ -5,7 +5,6 @@
 # main.py apenas faz startup/shutdown e despacha para este módulo.
 
 import argparse
-import re
 from datetime import date
 from typing import Any, Optional
 

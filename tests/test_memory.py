@@ -81,8 +81,8 @@ class TestTasks:
         assert len(tasks) == 3
 
     def test_get_tasks_by_status(self, mem):
-        t1 = mem.create_task("Tarefa pendente 1")
-        t2 = mem.create_task("Tarefa pendente 2")
+        mem.create_task("Tarefa pendente 1")
+        mem.create_task("Tarefa pendente 2")
         t3 = mem.create_task("Tarefa concluída")
         mem.update_task_status(t3, "Concluído")
 

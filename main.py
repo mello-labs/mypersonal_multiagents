@@ -39,7 +39,6 @@ from cli.commands import (
     cmd_suggest_agenda,
     cmd_tasks,
     cmd_validate,
-    cmd_web,
 )
 from config import validate_config
 from core import memory, notifier

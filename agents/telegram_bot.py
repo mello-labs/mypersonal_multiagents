@@ -12,8 +12,6 @@
 
 from __future__ import annotations
 
-import os
-import sys
 import time
 from typing import Any, Optional
 
@@ -211,7 +209,6 @@ def handle_callback(action: str, session_id: str, phase: str = "1") -> dict:
 def _process_callback(cq: dict) -> None:
     """Processa callback_query de botão inline."""
     cq_id = cq.get("id", "")
-    from_user = cq.get("from", {})
     chat_id = cq.get("message", {}).get("chat", {}).get("id")
     data = cq.get("data", "")
 

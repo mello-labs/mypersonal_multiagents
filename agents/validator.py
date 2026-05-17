@@ -88,7 +88,6 @@ def check_data_consistency(evidence: dict) -> dict:
     task = evidence.get("task", {})
     sessions = evidence.get("focus_sessions", [])
     blocks = evidence.get("agenda_blocks", [])
-    notion = evidence.get("notion_data")
 
     flags = {
         "local_status_is_done": task.get("status") == "Concluído",

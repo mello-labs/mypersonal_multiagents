@@ -17,13 +17,11 @@ credentials.json
 *.plist
 *.pdf
 .DS_Store
-tests
 neo-one-azure/
 go.sum
 go.mod
 .env.local
 .env.production
-docs/
 
 
 # Redis dumps
