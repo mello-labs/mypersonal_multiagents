@@ -94,32 +94,17 @@ dev-ui: redis-ready ## Start UI with deep watch for templates/CSS/JS
 		--reload-include 'web/static/**/*.js'
 
 .PHONY: guard
-guard: redis-ready ## Active Focus Guard monitoring
+guard: redis-ready ## Start Focus Guard daemon (background loop)
 	@printf "$(CYAN)🛡️ Focus Guard Active...$(RESET)\n"
-	@$(PY) main.py
+	@$(PY) main.py daemon
 
 .PHONY: sync
-sync: redis-ready ## Synchronize Notion state
+sync: redis-ready ## Synchronize Linear issues
 	@$(PY) main.py sync
-
-.PHONY: sync-all
-sync-all: redis-ready ## Sync Notion + Google Calendar
-	@printf "$(CYAN)🔄 Full synchronization in progress...$(RESET)\n"
-	@$(PY) main.py sync
-	@$(PY) main.py calendar import
-	@printf "$(GREEN)✓ All sources synchronized.$(RESET)\n"
 
 .PHONY: chat
 chat: redis-ready ## Interactive Orchestrator Shell
 	@$(PY) main.py chat
-
-.PHONY: retro
-retro: redis-ready ## Generate Weekly Retrospective
-	@$(PY) main.py retrospective
-
-.PHONY: vida
-vida: redis-ready ## Check Life Guard vitals (water, exercise, etc.)
-	@$(PY) main.py vida
 
 # -----------------------------------------------------------------------------
 # ⨷ QUALITY ASSURANCE
@@ -186,10 +171,10 @@ redis-flush: ## ⚠️  Wipe ALL Redis data
 .PHONY: doctor
 doctor: ## Deep system diagnostic
 	@printf "$(CYAN)Running Kernel Doctor...$(RESET)\n"
-	@$(PY) scripts/diagnose.py || printf "$(YELLOW)⚠ Diagnosis script incomplete.$(RESET)\n"
 	@printf "  $(BOLD)Python:$(RESET)   %s\n" "$$($(PY) --version)"
 	@printf "  $(BOLD)Redis:$(RESET)    %s\n" "$$(redis-cli PING 2>/dev/null || echo 'DOWN')"
 	@printf "  $(BOLD)Venv:$(RESET)     %s\n" "$$([ -d $(VENV) ] && echo 'OK' || echo 'MISSING')"
+	@$(PY) -c "import agents.orchestrator, agents.focus_guard, agents.linear_sync; print('  \033[32mAgents:\033[0m   OK')" 2>&1 || printf "  $(RED)Agents:$(RESET)   import error\n"
 
 .PHONY: logs
 logs: ## Show recent logs
@@ -205,7 +190,7 @@ health: ## Check FastAPI /health endpoint
 
 .PHONY: docker-clean
 docker-clean: ## Deep Docker cleanup (Cache + Images)
-	@bash scripts/docker_maintenance.sh deep
+	@docker system prune -f && docker image prune -af
 
 .PHONY: docker-df
 docker-df: ## Docker disk usage
