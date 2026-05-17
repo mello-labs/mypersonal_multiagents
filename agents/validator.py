@@ -3,7 +3,7 @@
 # =============================================================================
 # Responsável por:
 #   - Confirmar se uma tarefa foi REALMENTE concluída (não apenas marcada)
-#   - Cruzar dados do banco local com o Notion
+#   - Cruzar dados do banco local com sessões de foco e agenda
 #   - Pedir confirmação ao usuário quando necessário
 #   - Emitir veredicto final (validated / rejected / pending_confirmation)
 #
@@ -32,14 +32,14 @@ Avalie os dados fornecidos e retorne um veredicto em JSON:
 }
 
 Critérios para "validated":
-  - Tarefa marcada como concluída no banco local E no Notion
+  - Tarefa marcada como concluída no banco local
   - Horário real de conclusão registrado
   - Sessão de foco correspondente encerrada como 'completed'
   - Conteúdo da tarefa compatível com o esperado
 
 Critérios para "rejected":
   - Marcada como concluída mas sem horário real
-  - Dados inconsistentes entre local e Notion
+  - Dados inconsistentes no banco local
   - Sessão de foco abandonada ou nunca iniciada
 
 Critérios para "pending_confirmation":
@@ -60,7 +60,7 @@ def _get_validator_prompt() -> str:
 def gather_evidence(task_id: int) -> dict:
     """
     Coleta todas as evidências disponíveis sobre conclusão de uma tarefa.
-    Cruza dados do banco local, sessões de foco e estado do Notion.
+    Cruza dados do banco local, sessões de foco e blocos de agenda.
     """
     task = memory.get_task(task_id)
     if not task:

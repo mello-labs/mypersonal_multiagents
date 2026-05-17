@@ -54,6 +54,7 @@ def test_chat_completions_fallback(monkeypatch):
 
     # Cria uma chain de teste (API: cloud_primary / cloud_fallback)
     test_chain = openai_utils.LLMChain(
+        azure=None,
         cloud=fake_cloud,
         cloud_primary="primary",
         cloud_fallback="fallback",

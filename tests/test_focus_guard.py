@@ -93,10 +93,6 @@ def test_focus_guard_usa_escalation_level_60min(mem, monkeypatch):
     monkeypatch.setattr(focus_guard.notifier, "warning", lambda *args, **kwargs: None)
     monkeypatch.setattr(focus_guard.notifier, "error", lambda *args, **kwargs: None)
     monkeypatch.setattr(focus_guard.notifier, "separator", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        "agents.life_guard.run_all_checks",
-        lambda: {"routines": [], "hydration": False, "finances": []}
-    )
 
     focus_guard._run_focus_check()
 

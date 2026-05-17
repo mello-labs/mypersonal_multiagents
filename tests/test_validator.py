@@ -14,7 +14,10 @@ def test_check_data_consistency_scores_all_flags():
     flags = validator.check_data_consistency(evidence)
 
     assert flags["consistency_score"] == 100
-    assert flags["notion_status_matches"] is True
+    assert flags["local_status_is_done"] is True
+    assert flags["has_actual_time"] is True
+    assert flags["has_completed_session"] is True
+    assert flags["block_completed"] is True
 
 
 @pytest.mark.parametrize(

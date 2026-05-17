@@ -16,73 +16,78 @@
 ## ⟠ Objetivo
 
 Este arquivo guarda **blueprints diretos**: o que agentes e humanos tratam
-como verdade estável sobre **interface**, **Notion**, **Railway** e
-**rotinas**, sem depender só do chat.
+como verdade estável sobre **LLM**, **interface**, **Railway** e
+**pipelines de dados**, sem depender só do chat.
 
 ────────────────────────────────────────
 
-## ⧉ Superfícies: Notion vs web
+## ⧉ Superfícies: CLI, Telegram e integrações
 
-- **Notion** (NEOBOT / workspace): fonte legítima de tarefas e agenda
-  enquanto o `/sync` alimentar a memória local. Abrir Notion **não é
-  falha de produto** — é uso esperado até o painel web fechar o circuito
-  com o mesmo conforto.
-- **Web (FastAPI + HTMX)** no Railway: **alvo de superfície principal**
-  quando estiver “oficial” e sem ruído; o operador prefere **não** depender
-  de planilha manual no dia a dia.
-- **Regra prática para código:** ao propor fluxos, assume **sync
-  Notion → `core/memory`** como caminho existente; melhorias devem
-  **reduzir** trabalho duplicado, não exigir gravação espalhada.
+- **CLI** (`main.py`): superfície primária de operação — REPL, agenda,
+  tarefas, focus, sync, capture e diagnóstico.
+- **Telegram Bot**: inbound do segundo cérebro via long-poll HTTP.
+  Captura texto livre → Capture Agent classifica → Linear issue.
+- **Linear**: task store canônico de engenharia e captura.
+  `python main.py sync` importa issues do Linear para Redis.
+  Agente: `linear_sync.py`. `capture_agent.py` cria issues no Linear.
+- **Notion**: destino **apenas** do `github_projects.py`
+  (GitHub Projects v2 → `NOTION_DB_TAREFAS`). Não é fonte de captura.
+- **Regra prática:** ao propor fluxos de tarefa, assuma
+  **Linear → `core/memory`** como caminho canônico;
+  Notion é exclusivo do espelho GitHub → Notion, não de captura humana.
 
 ────────────────────────────────────────
 
-## ⨷ Agenda no dashboard (verdade técnica)
+## ⨷ Pipeline de agenda (verdade técnica)
 
 ```text
-Notion (DB Agenda / TO-DO)
-        │  sync_agenda_range_to_local + sync_tasks_to_local
-        ▼
-  core/memory (local + Redis onde aplicável)
-        │  get_today_agenda()
-        ▼
-  Card "Agenda hoje" na home
+Linear (issues) ──── linear_sync.py ──── core/memory (Redis)
+                                                │  get_today_agenda()
+                                                ▼
+                                          CLI / Focus Guard
+
+Telegram (captura) ── capture_agent.py ── Linear (issue)
+                            │
+                            └── classify() → categoria LOG/TASK/DECISION/PROJECT/INTEGRATION
+
+GitHub (projects) ── github_projects.py ── Notion (NOTION_DB_TAREFAS)
+                          │                     └── mapa issue↔page em Redis
+                          └── GraphQL → sync_all_orgs()
 ```
 
-- **“Sem blocos hoje”** indica falta de dados na pipeline **após** o
-  último sync ou datas fora da janela — não necessariamente “operador
-  ignorou o Notion”.
-- Evolução desejável: agentes e captura gerarem blocos sem exigir
-  edição estilo planilha.
+- **"Sem blocos hoje"** indica falta de dados em Redis — rode
+  `python main.py sync` para importar do Linear.
+- Blocos são gerados pelos agentes; edição manual não é necessária.
 
 ────────────────────────────────────────
 
-## ◭ Life Guard · notificações (macOS)
+## ⟁ LLM — NEOone (Azure OpenAI)
 
-- Recurso **valioso** (água, refeições, rotinas vitais).
-- **Refinamento em curso:** volume, repetição (ex.: vários “Beber água”
-  seguidos), horários — tratar como **melhoria contínua**, não como bug
-  de conceito.
+- **Provider primário:** Azure OpenAI, deployment `gpt-oss-120b`,
+  endpoint `https://neo-one.openai.azure.com/`.
+- **Cadeia de fallback:** Azure → `gpt-4o-mini` (OpenAI público) →
+  `gpt-3.5-turbo` → Gemma3 local (se `LOCAL_MODEL_ENABLED=true`).
+- **Configurado via:** `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT`
+  no `.env`. Railway: Dashboard → Variables.
+- **Regra prática:** nunca passe `model=` direto — use sempre
+  `core.openai_utils.chat_completions(**kwargs)`. A chain gerencia
+  provider, fallback e logging automaticamente.
+- **max_tokens mínimo:** gpt-oss-120b requer `≥200` — com menos o modelo
+  retorna string vazia (`finish_reason: length`).
 
 ────────────────────────────────────────
 
 ## ⧇ GitHub Projects → Notion (âncora de escopo)
 
-- Direção acordada: **ler roadmap/Gantt no GitHub Projects** e
-  **materializar em tasks** no Notion; conclusão forte no **eixo
-  GitHub/commits**; agenda fina no ritmo humano.
-- Espelho bidirecional completo **não** é pré-requisito para v1.
-- CLI: `python main.py github discover [--root PATH]` compara manifests
-  em `NEOMELLO_WORKSPACES_ROOT` com `GITHUB_PROJECTS` em `config`;
-  `python main.py github sync [--org SLUG] [--dry-run]` importa boards
-  para `NOTION_DB_TAREFAS`. Mapa issue→página: Redis
-  `state:github_projects:issue_notion_map`.
-- **Onde ver no Notion:** o database configurado em `NOTION_DB_TAREFAS`
-  (ex.: **Tarefas & Ações** no Command Center), **não** a página “Gestão
-  de tempo” nem blocos TO-DO antigos — são superfícies diferentes.
-- Diagnóstico: `python main.py github notion-check` (schema do DB,
-  amostra de linhas, tamanho do mapa Redis).
-- Reimportar do zero (novos POST): `python main.py github reset-map`
+- Direção única: **GitHub Projects v2 → Notion** (`NOTION_DB_TAREFAS`).
+- CLI: `python main.py github sync [--org SLUG] [--dry-run]`
+- Diagnóstico: `python main.py github notion-check`
+- Reimportar do zero: `python main.py github reset-map`
   (limpa Redis; páginas antigas no Notion não são apagadas).
+- Mapa issue→página: Redis `state:github_projects:issue_notion_map`.
+- **Nota:** `ecosystem_monitor` e `github_projects` ainda não têm
+  `handle_handoff` — não são roteáveis pelo Orchestrator.
+  Expostos apenas via CLI e daemon.
 
 ────────────────────────────────────────
 
@@ -97,6 +102,6 @@ Notion (DB Agenda / TO-DO)
 ```text
 ▓▓▓ NΞØ MELLØ
 ────────────────────────────────────────
-Kernel memory · interface truth
+The Archtect · NEØ PROTOCOL
 ────────────────────────────────────────
 ```

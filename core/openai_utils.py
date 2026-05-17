@@ -2,12 +2,13 @@
 # core/openai_utils.py — Cadeia de fallback entre providers LLM
 # =============================================================================
 # Ordem de tentativa (detectada automaticamente na ordem configurada):
-#   1. OpenAI público → OPENAI_MODEL                        (primário cloud)
-#   2. OpenAI público → OPENAI_FALLBACK_MODEL               (fallback cloud)
-#   3. Local          → LOCAL_MODEL_NAME  (Gemma3 via Docker Model Runner)
+#   1. Azure OpenAI  → AZURE_OPENAI_DEPLOYMENT (NEOone — gpt-oss-120b)  ← primário
+#   2. OpenAI público → OPENAI_MODEL           (gpt-4o-mini)             ← fallback cloud
+#   3. OpenAI público → OPENAI_FALLBACK_MODEL  (gpt-3.5-turbo)           ← fallback cloud 2
+#   4. Local          → LOCAL_MODEL_NAME       (Gemma3 via Docker)        ← fallback dev
 #
 # Se um provider não estiver configurado, ele é simplesmente pulado.
-# A API pública continua: chat_completions(**kwargs) — sem passar model=.
+# API pública: chat_completions(**kwargs) — sem passar model=.
 # =============================================================================
 
 from __future__ import annotations
@@ -18,9 +19,13 @@ from functools import cached_property
 from typing import Any, Callable
 
 import httpx
-from openai import OpenAI
+from openai import AzureOpenAI, OpenAI
 
 from config import (
+    AZURE_OPENAI_API_KEY,
+    AZURE_OPENAI_API_VERSION,
+    AZURE_OPENAI_DEPLOYMENT,
+    AZURE_OPENAI_ENDPOINT,
     LOCAL_MODEL_BASE_URL,
     LOCAL_MODEL_ENABLED,
     LOCAL_MODEL_NAME,
@@ -30,8 +35,6 @@ from config import (
 )
 from core import notifier
 
-# Caminho do socket Unix do Docker Model Runner — configurável via env var
-# ou auto-detectado no path padrão do macOS.
 _DOCKER_SOCKET = os.getenv(
     "DOCKER_MODEL_RUNNER_SOCKET",
     os.path.expanduser(
@@ -43,6 +46,27 @@ _DOCKER_SOCKET = os.getenv(
 # ---------------------------------------------------------------------------
 # Providers
 # ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class _AzureProvider:
+    """Cliente Azure OpenAI (NEOone — gpt-oss-120b)."""
+
+    api_key: str
+    endpoint: str
+    deployment: str
+    api_version: str
+
+    @cached_property
+    def client(self) -> AzureOpenAI:
+        return AzureOpenAI(
+            api_key=self.api_key,
+            azure_endpoint=self.endpoint,
+            api_version=self.api_version,
+        )
+
+    def complete(self, **kwargs: Any):
+        return self.client.chat.completions.create(model=self.deployment, **kwargs)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -77,7 +101,6 @@ class _LocalProvider:
                 api_key="local",
                 http_client=http_client,
             )
-        # Railway / ambientes sem socket — cai para TCP (se houver)
         return OpenAI(base_url=self.base_url, api_key="local")
 
     def complete(self, **kwargs: Any):
@@ -91,8 +114,9 @@ class _LocalProvider:
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class LLMChain:
-    """Orquestra a cadeia de fallback OpenAI público → Local."""
+    """Orquestra a cadeia de fallback Azure → OpenAI público → Local."""
 
+    azure: _AzureProvider | None
     cloud: _CloudProvider | None
     cloud_primary: str | None
     cloud_fallback: str | None
@@ -101,7 +125,16 @@ class LLMChain:
     def complete(self, **kwargs: Any):
         attempts: list[tuple[str, Callable[[], Any]]] = []
 
-        # 1-2. OpenAI público
+        # 1. Azure OpenAI (NEOone — gpt-oss-120b)
+        if self.azure is not None:
+            attempts.append(
+                (
+                    f"azure/{self.azure.deployment}",
+                    lambda: self.azure.complete(**kwargs),  # type: ignore[union-attr]
+                )
+            )
+
+        # 2-3. OpenAI público
         if self.cloud is not None and self.cloud_primary:
             attempts.append(
                 (
@@ -117,7 +150,7 @@ class LLMChain:
                     )
                 )
 
-        # 3. Local
+        # 4. Local
         if self.local is not None:
             attempts.append(
                 (
@@ -128,8 +161,8 @@ class LLMChain:
 
         if not attempts:
             raise RuntimeError(
-                "Nenhum provider LLM configurado. Defina OPENAI_API_KEY ou "
-                "LOCAL_MODEL_ENABLED=true."
+                "Nenhum provider LLM configurado. Defina AZURE_OPENAI_API_KEY, "
+                "OPENAI_API_KEY ou LOCAL_MODEL_ENABLED=true."
             )
 
         last_exc: Exception | None = None
@@ -151,6 +184,15 @@ class LLMChain:
 
 
 def _build_chain() -> LLMChain:
+    azure: _AzureProvider | None = None
+    if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
+        azure = _AzureProvider(
+            api_key=AZURE_OPENAI_API_KEY,
+            endpoint=AZURE_OPENAI_ENDPOINT,
+            deployment=AZURE_OPENAI_DEPLOYMENT,
+            api_version=AZURE_OPENAI_API_VERSION,
+        )
+
     cloud: _CloudProvider | None = None
     if OPENAI_API_KEY:
         cloud = _CloudProvider(api_key=OPENAI_API_KEY)
@@ -160,6 +202,7 @@ def _build_chain() -> LLMChain:
         local = _LocalProvider(model=LOCAL_MODEL_NAME)
 
     return LLMChain(
+        azure=azure,
         cloud=cloud,
         cloud_primary=OPENAI_MODEL if cloud else None,
         cloud_fallback=OPENAI_FALLBACK_MODEL if cloud else None,
@@ -178,8 +221,8 @@ _chain: LLMChain = _build_chain()
 def chat_completions(**kwargs: Any):
     """Drop-in para openai.chat.completions.create().
 
-    NÃO passe `model=` — a chain gerencia internamente (OpenAI público
-    primary; cai para fallback model; cai para local).
+    NÃO passe `model=` — a chain gerencia internamente (Azure primário;
+    cai para OpenAI público; cai para local).
     """
     return _chain.complete(**kwargs)
 
@@ -187,8 +230,10 @@ def chat_completions(**kwargs: Any):
 def describe_chain() -> list[str]:
     """Retorna lista human-readable dos providers ativos (para /status)."""
     desc: list[str] = []
+    if _chain.azure is not None:
+        desc.append(f"azure:{_chain.azure.deployment}")
     if _chain.cloud is not None and _chain.cloud_primary:
-        desc.append(f"openai:{_chain.cloud_primary}")
+        desc.append(f"openai:{_chain.cloud_primary}(fb)")
     if _chain.cloud is not None and _chain.cloud_fallback:
         desc.append(f"openai:{_chain.cloud_fallback}(fb)")
     if _chain.local is not None:

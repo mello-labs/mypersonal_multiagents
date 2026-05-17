@@ -5,10 +5,9 @@
 #   - Criar e gerenciar blocos de agenda no dia
 #   - Priorizar tarefas por urgência/horário
 #   - Sugerir reorganizações de agenda via LLM
-#   - Sincronizar com o Notion Sync Agent
+#   - Sincronizar com o Linear Sync Agent
 
 import json
-import os
 from datetime import date, datetime, time, timedelta
 from typing import Optional
 
@@ -454,7 +453,7 @@ Por favor, crie uma agenda otimizada para hoje. Retorne JSON puro (sem markdown)
         return {"schedule": [], "warnings": [str(e)]}
 
 
-def apply_llm_suggestion(suggestion: dict, auto_sync_notion: bool = False) -> list[int]:
+def apply_llm_suggestion(suggestion: dict) -> list[int]:
     """
     Aplica a sugestão de agenda do LLM ao banco local.
     Retorna lista de IDs de blocos criados.

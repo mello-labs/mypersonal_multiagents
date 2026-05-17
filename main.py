@@ -6,7 +6,7 @@
 #   python main.py                    → modo interativo (REPL)
 #   python main.py chat               → modo interativo (equivalente)
 #   python main.py status             → exibe status do sistema
-#   python main.py sync               → sincroniza com Notion
+#   python main.py sync               → sincroniza com Linear
 #   python main.py add-task           → wizard para adicionar tarefa
 #   python main.py agenda             → exibe agenda de hoje
 #   python main.py focus start <id>   → inicia sessão de foco
@@ -54,8 +54,7 @@ def _startup() -> None:
     """Inicializa o sistema: banco de dados, validação de config, banner."""
     notifier.banner()
     memory.init_db()
-    warnings = validate_config()
-    if warnings:
+    if warnings := validate_config():
         notifier.separator("AVISOS DE CONFIGURAÇÃO")
         for w in warnings:
             notifier.warning(w)

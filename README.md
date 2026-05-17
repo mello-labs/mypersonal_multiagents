@@ -9,16 +9,16 @@
 ========================================
 ```
 
-Portal providing access to the multi-agent nodes
-that serve the NEØ architect.
-como origem principal, Google Calendar
-como capacidade opcional, Sanity.io
-e monitoramento autônomo de foco.
+Camada operacional de um sistema pessoal
+que converte intenção em agenda executada,
+com memória durável, auditoria contínua
+e captura via Telegram.
 
-> **Status:** Fase 2 operacional
-> **Python:** >=3.11
+> **Status:** v0.7.0 — NEOone (Azure gpt-oss-120b) como LLM primário
+> **Python:** >=3.12
 > **Deploy:** Railway + Redis
-> **Interface:** FastAPI + Jinja2 + HTMX (PWA)
+> **Interface:** CLI + Telegram Bot
+> **LLM:** Azure OpenAI → OpenAI → Local (fallback chain)
 
 ────────────────────────────────────────
 
@@ -36,7 +36,7 @@ execução, validação e memória.
 ┃
 ┃ Orchestrator
 ┃   └─ roteia intenções do usuário
-┃      e consolida respostas
+┃      e consolida respostas via LLM
 ┃
 ┃ Focus Guard
 ┃   └─ monitora atraso, desvio,
@@ -48,38 +48,31 @@ execução, validação e memória.
 ┃   └─ cria, ordena e move blocos
 ┃      de agenda
 ┃
-┃ Notion Sync
-┃   └─ sincroniza tarefas e agenda
-┃      com databases do Notion
-┃
-┃ Calendar Sync
-┃   └─ integra Google Calendar
-┃      como fonte opcional de
-┃      importação e exportação
-┃
 ┃ Validator
 ┃   └─ valida conclusão de tarefas
 ┃      com evidências cruzadas
 ┃
-┃ Retrospective
-┃   └─ gera relatório semanal com
-┃      métricas e insights via LLM
+┃ Capture Agent
+┃   └─ classifica e envia capturas
+┃      para o NEØ Command Center
+┃      (Notion DBs: projetos, tarefas,
+┃       decisões, worklog)
 ┃
-┃ Life Guard
-┃   └─ rotinas pessoais: hidratação,
-┃      exercício, refeições, finanças
+┃ Linear Sync
+┃   └─ cria e sincroniza issues
+┃      no Linear (tracking de eng.)
 ┃
-┃ Persona Manager
-┃   └─ personas dinâmicas com
-┃      injeção de system prompt
+┃ Telegram Bot
+┃   └─ inbound do segundo cérebro
+┃      via long-poll HTTP puro
 ┃
 ┃ Ecosystem Monitor
 ┃   └─ monitora GitHub, Railway,
-┃      Vercel, on-chain em 6 orgs
+┃      on-chain em múltiplas orgs
 ┃
-┃ Audit Trail
-┃   └─ registra alertas, handoffs,
-┃      desvios, logs e reações
+┃ GitHub Projects
+┃   └─ espelha issues/PRs dos
+┃      boards GitHub → Notion DB
 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
@@ -91,20 +84,19 @@ execução, validação e memória.
 ```text
 Usuário
   │
-  ├─ Web UI (/)
+  ├─ Telegram Bot          (captura inbound)
   └─ CLI (main.py)
        │
        ▼
-  Orchestrator
-       │
+  Orchestrator ──────────── Azure OpenAI (NEOone · gpt-oss-120b)
+       │                         └─ fallback: gpt-4o-mini → local
        ├─ Scheduler
        ├─ Focus Guard
-       │    └─ Life Guard (rotinas)
-       ├─ Notion Sync
-       ├─ Calendar Sync (opcional)
        ├─ Validator
-       ├─ Retrospective
-       └─ Persona Manager
+       ├─ Capture Agent    (→ Notion Command Center)
+       ├─ Linear Sync      (→ Linear issues)
+       ├─ GitHub Projects  (GitHub → Notion)
+       └─ Ecosystem Monitor
              │
              ▼
           Redis
@@ -124,17 +116,15 @@ Usuário
 # 1. Criar ambiente e instalar dependências
 make setup
 
-# 2. Subir Redis local + app web
-make dev-full
+# 2. Chat interativo com o orchestrator
+make chat
 
-# 3. Acessar interface
-open http://localhost:8000
+# 3. Focus Guard em background
+make guard
 
 # 4. Rodar testes
-make test-q
+make test
 ```
-
-> Se o Redis já estiver disponível, use `make dev`.
 
 ────────────────────────────────────────
 
@@ -142,25 +132,15 @@ make test-q
 
 ```text
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ SURFACE              PURPOSE        
+┃ SURFACE              PURPOSE
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Web UI               dashboard,
-┃                      agenda, audit,
-┃                      tasks, chat
-┃ CLI                  operação local
-┃                      e automação
-┃ Redis                persistência
-┃                      operacional
-┃ Notion               fonte principal
-┃                      de tarefas e agenda
-┃ Google Calendar      capacidade
-┃                      opcional de agenda
-┃ Sanity Studio        prompts, personas
-┃                      e configs externas
-┃ macOS Push + Alexa   notificações de
-┃                      foco e rotinas
-┃ Railway              deploy web +
-┃                      healthcheck
+┃ CLI                  operação local e automação
+┃ Telegram Bot         captura inbound (segundo cérebro)
+┃ Redis                persistência operacional
+┃ Notion               destino de captura (NEØ Command Center)
+┃ Linear               tracking de issues de engenharia
+┃ Railway              deploy daemon + telegram
+┃ Voice Monkey         notificações Alexa (foco e rotinas)
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
@@ -171,138 +151,119 @@ make test-q
 ```text
 multiagentes/
 ├── agents/
-│   ├── orchestrator.py      roteador central
+│   ├── orchestrator.py      roteador central via LLM
 │   ├── focus_guard.py       monitor de foco, escalada e auto-reschedule
 │   ├── scheduler.py         agenda e blocos
-│   ├── notion_sync.py       sync com Notion (bidirecional)
-│   ├── calendar_sync.py     integração opcional com Google Calendar
-│   ├── validator.py         validação de conclusão
-│   ├── retrospective.py     retrospectiva semanal
-│   ├── life_guard.py        rotinas pessoais (hidratação, exercício, finanças)
-│   ├── persona_manager.py   seletor de personas dinâmicas
-│   └── ecosystem_monitor.py monitoramento de projetos
+│   ├── validator.py         validação de conclusão com evidências
+│   ├── capture_agent.py     classifica e envia ao Notion Command Center
+│   ├── linear_sync.py       cria e sincroniza issues no Linear
+│   ├── telegram_bot.py      inbound via Telegram (long-poll HTTP)
+│   ├── ecosystem_monitor.py monitoramento de projetos e orgs
+│   └── github_projects.py   GitHub Projects v2 → Notion DB
+├── adapters/
+│   └── notion.py            cliente HTTP compartilhado para Notion API
+├── cli/
+│   └── commands.py          implementação de todos os comandos CLI
+├── config/
+│   ├── alert_thresholds.yml limites de alerta do ecosystem monitor
+│   └── ecosystem.yml        mapeamento de orgs e projetos
 ├── core/
-│   ├── memory.py            persistência Redis + SQLite fallback
-│   ├── openai_utils.py      wrapper central para OpenAI API
-│   ├── notifier.py          logs, terminal, macOS push, Alexa
-│   └── sanity_client.py     cliente Sanity.io com cache e fallback
-├── web/
-│   ├── app.py               FastAPI app
-│   ├── templates/           páginas e partials (Jinja2 + HTMX)
-│   └── static/              manifest, service worker, ícones
+│   ├── memory.py            persistência Redis (fonte de verdade)
+│   ├── openai_utils.py      cadeia LLM: Azure → OpenAI → Local
+│   └── notifier.py          logs, terminal, macOS push, Alexa
+├── notifications/
+│   └── channels.py          canais de saída (terminal, push, Alexa)
+├── scheduler/
+│   └── runner.py            loop de background e jobs periódicos
 ├── docs/
 │   ├── INDEX.md             índice geral da documentação
 │   ├── governanca/          contratos, matriz e políticas de precedência
 │   ├── arquitetura/         schema e modelo semântico
 │   ├── operacao/            manuais e runbooks operacionais
 │   ├── planejamento/        sprints e trilha de execução
-│   ├── ecossistema/         mapa das orgs e referências externas
-│   └── auditoria/           auditorias e verificações
-├── personas/
-│   ├── architect.json       persona arquiteto
-│   ├── coordinator.json     persona coordenador
-│   └── taylor.json          persona taylor
-├── sanity/                  Sanity Studio (schemas e config)
-├── scripts/                 macOS launchd plist + installer
+│   └── ecossistema/         mapa das orgs e referências externas
 ├── tests/
 │   ├── test_memory.py
 │   ├── test_focus_guard.py
-│   ├── test_notion_sync.py
+│   ├── test_scheduler.py
 │   ├── test_orchestrator.py
-│   └── test_web_chat.py
+│   ├── test_validator.py
+│   └── test_notifier_openai_utils.py
 ├── main.py                  entrypoint CLI
 ├── config.py                configuração central
 ├── ROADMAP.md               roadmap e próximas frentes
 ├── Dockerfile               build Railway
-├── Procfile                 entrypoint deploy
-├── railway.json             healthcheck / restart policy
+├── Procfile                 entrypoints de deploy
 ├── Makefile                 operação local
 └── requirements.txt         dependências Python
 ```
 
 ────────────────────────────────────────
 
-## Main Pages
-
-```text
-▓▓▓ WEB INTERFACE
-────────────────────────────────────────
-└─ /                         dashboard principal
-└─ /agenda                   agenda navegável por intervalo
-└─ /tasks-page               criar e gerenciar tarefas
-└─ /chat-page                chat full-screen com orchestrator
-└─ /audit                    alertas, eventos, handoffs e logs
-└─ /health                   healthcheck para Railway
-
-▓▓▓ INTERACTIONS
-────────────────────────────────────────
-└─ /chat                     conversa com orchestrator (HTMX)
-└─ /task                     criação de tarefa
-└─ /task/{id}/complete       conclusão de tarefa
-└─ /block/{id}/complete      conclusão de bloco
-└─ /agenda/import            importação de intervalo
-└─ /sync                     sincronização com Notion
-└─ /tasks                    lista de tarefas (partial)
-```
-
-────────────────────────────────────────
-
 ## Integrations
 
-| Integração      | Papel                                | Variáveis principais                                                 |
-| --------------- | ------------------------------------ | -------------------------------------------------------------------- |
-| OpenAI          | roteamento e síntese do orchestrator | `OPENAI_API_KEY`, `OPENAI_MODEL`                                     |
-| Notion          | fonte principal de tarefas e agenda  | `NOTION_TOKEN`, `NOTION_TASKS_DB_ID`, `NOTION_AGENDA_DB_ID`          |
-| Google Calendar | integração opcional de agenda        | `GOOGLE_CREDENTIALS_FILE`, `GOOGLE_TOKEN_FILE`, `GOOGLE_CALENDAR_ID` |
-| Sanity.io       | prompts, personas, configs externas  | `SANITY_PROJECT_ID`, `SANITY_API_TOKEN`, `SANITY_DATASET`            |
-| Voice Monkey    | anúncios na Alexa                    | `VOICE_MONKEY_TOKEN`, `VOICE_MONKEY_DEVICE`                          |
-| Redis           | memória e persistência               | `REDIS_URL`                                                          |
-| Railway         | deploy do app web                    | `PORT`, `REDIS_URL`                                                  |
+| Integração      | Papel                                       | Variáveis principais                                                         |
+| --------------- | ------------------------------------------- | ---------------------------------------------------------------------------- |
+| Azure OpenAI    | LLM primário — NEOone (gpt-oss-120b)        | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`  |
+| OpenAI          | LLM fallback cloud                          | `OPENAI_API_KEY`, `OPENAI_MODEL`                                             |
+| Redis           | memória e persistência (fonte de verdade)   | `REDIS_URL`                                                                  |
+| Notion          | destino de captura (NEØ Command Center)     | `NOTION_TOKEN`, `NOTION_DB_PROJETOS`, `NOTION_DB_TAREFAS`                   |
+| Linear          | tracking de issues de engenharia            | `LINEAR_API_KEY`, `LINEAR_TEAM_ID`                                           |
+| GitHub          | espelho Projects v2 → Notion                | `GITHUB_TOKEN`                                                               |
+| Telegram        | captura inbound do segundo cérebro          | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_CHAT_IDS`                           |
+| Railway         | deploy daemon + telegram                    | `RAILWAY_TOKEN`, `RAILWAY_WORKSPACE_ID`                                      |
+| Voice Monkey    | anúncios na Alexa                           | `VOICE_MONKEY_TOKEN`, `VOICE_MONKEY_DEVICE`                                  |
 
 ────────────────────────────────────────
 
 ## Environment Variables
 
 ```bash
-# --- OBRIGATÓRIO ---
-OPENAI_API_KEY=              # chave OpenAI
-NOTION_TOKEN=                # integration token Notion
-NOTION_TASKS_DB_ID=          # database "Tarefas"
-NOTION_AGENDA_DB_ID=         # database "Agenda Diária"
+# --- LLM PRIMÁRIO: Azure OpenAI (NEOone) ---
+AZURE_OPENAI_API_KEY=
+AZURE_OPENAI_ENDPOINT=https://<seu-recurso>.openai.azure.com/
+AZURE_OPENAI_DEPLOYMENT=gpt-oss-120b
+AZURE_OPENAI_API_VERSION=2025-01-01-preview
 
-# --- OPENAI (opcional) ---
+# --- LLM FALLBACK: OpenAI público ---
+OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 OPENAI_FALLBACK_MODEL=gpt-3.5-turbo
-OPENAI_MAX_TOKENS=1500
-OPENAI_TEMPERATURE=0.2
 
-# --- NOTION (opcional) ---
-NOTION_RETROSPECTIVE_PAGE_ID=
-NOTION_SYNC_INTERVAL=5
-
-# --- REDIS ---
+# --- OBRIGATÓRIO ---
 REDIS_URL=redis://localhost:6379/0
 
-# --- GOOGLE CALENDAR (opcional) ---
-GOOGLE_CREDENTIALS_FILE=./credentials.json
-GOOGLE_TOKEN_FILE=./token.json
-GOOGLE_CALENDAR_ID=primary
+# --- NOTION (destino de captura) ---
+NOTION_TOKEN=
+NOTION_DB_PROJETOS=
+NOTION_DB_TAREFAS=
+NOTION_DB_DECISOES=
+NOTION_DB_WORKLOG=
+NOTION_DB_INTEGRATIONS=
 
-# --- SANITY.IO (opcional) ---
-SANITY_PROJECT_ID=           # project ID do sanity.io/manage
-SANITY_DATASET=production
-SANITY_API_TOKEN=            # token com permissão Viewer
-SANITY_USE_CDN=false
+# --- LINEAR ---
+LINEAR_API_KEY=
+LINEAR_TEAM_ID=
+
+# --- GITHUB ---
+GITHUB_TOKEN=                # PAT: project, read:org, repo
+GH_PROJECT_FLOWPAY=1
+GH_PROJECT_FLOWOFF=1
+GH_PROJECT_NEO=1
+GH_PROJECT_FACTORY=1
+
+# --- TELEGRAM ---
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_ALLOWED_CHAT_IDS=   # comma-separated int IDs
+
+# --- RAILWAY ---
+RAILWAY_TOKEN=
+RAILWAY_WORKSPACE_ID=
 
 # --- NOTIFICAÇÕES — VOICE MONKEY (opcional) ---
-VOICE_MONKEY_TOKEN=          # api-v2.voicemonkey.io
+VOICE_MONKEY_TOKEN=
 VOICE_MONKEY_DEVICE=eco-room
 VOICE_MONKEY_VOICE=Ricardo
-
-# --- LIFE GUARD (opcional) ---
-LIFE_GUARD_ACTIVE_HOUR_START=8
-LIFE_GUARD_ACTIVE_HOUR_END=22
-LIFE_GUARD_WATER_INTERVAL=90
 
 # --- FOCUS GUARD ---
 FOCUS_CHECK_INTERVAL=15
@@ -310,10 +271,6 @@ FOCUS_CHECK_INTERVAL=15
 # --- LOGGING ---
 LOG_FILE=./logs/agent_system.log
 LOG_LEVEL=INFO
-
-# --- WEB ---
-WEB_HOST=127.0.0.1
-WEB_PORT=8000
 ```
 
 ────────────────────────────────────────
@@ -324,20 +281,23 @@ WEB_PORT=8000
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ COMMAND                ACTION                          ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ make setup             setup inicial (venv + deps)
-┃ make dev               FastAPI local
-┃ make dev-full          FastAPI + Redis
-┃ make guard             Focus Guard CLI
-┃ make sync              sync Notion
-┃ make agenda            agenda do dia
-┃ make tasks             lista tarefas
-┃ make vida              status rotinas pessoais
-┃ make retro             retrospectiva semanal
-┃ make calendar-auth     OAuth Google Calendar opcional
-┃ make calendar-import   importa eventos opcionais
-┃ make test-q            testes rápidos
-┃ make check             lint + testes
-┃ make web               inicia interface web
+┃ make setup             venv + deps + .env + redis      ┃
+┃ make commit            NΞØ secure commit flow          ┃
+┃ make chat              REPL interativo (orchestrator)  ┃
+┃ make guard             Focus Guard daemon              ┃
+┃ make sync              sincroniza issues Linear        ┃
+┃ make check             lint + testes (CI local)        ┃
+┃ make lint              ruff check + fix                ┃
+┃ make fmt               ruff format                     ┃
+┃ make test              pytest                          ┃
+┃ make security          pip-audit                       ┃
+┃ make doctor            diagnóstico do sistema          ┃
+┃ make logs              tail dos logs recentes          ┃
+┃ make redis-stats       stats do Redis local            ┃
+┃ make redis-keys        lista chaves Redis              ┃
+┃ make redis-flush       ⚠️ wipe Redis local             ┃
+┃ make docker-clean      prune Docker                    ┃
+┃ make shell             iPython com contexto            ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
@@ -346,25 +306,23 @@ WEB_PORT=8000
 ## CLI Commands
 
 ```text
-python main.py                     # Modo interativo (REPL)
+python main.py                     # REPL interativo (chat com orchestrator)
 python main.py status              # Status do sistema
 python main.py agenda              # Agenda de hoje
 python main.py tasks               # Lista de tarefas
 python main.py add-task            # Wizard nova tarefa
-python main.py sync                # Sync com Notion
+python main.py sync                # Sync issues Linear
 python main.py suggest             # Sugestão de agenda via LLM
 python main.py focus start [id]    # Inicia sessão de foco
 python main.py focus end           # Encerra sessão de foco
-python main.py validate [id]       # Valida tarefa
-python main.py demo                # Dados de demonstração
-python main.py retrospective       # Retrospectiva semanal
-python main.py web                 # Inicia interface web
-python main.py vida                # Status das rotinas pessoais
-python main.py fiz <rotina>        # Confirma rotina (exercicio|banho|almoco|jantar)
-python main.py pagar <args>        # Registra conta a pagar
-python main.py calendar auth       # Autoriza Google Calendar opcional
-python main.py calendar import     # Importa eventos opcionais de hoje
-python main.py calendar status     # Status da integração opcional
+python main.py validate [id]       # Valida conclusão de tarefa
+python main.py demo                # Popula dados de demonstração
+python main.py ecosistema          # Ecosystem monitor (GitHub, Railway, on-chain)
+python main.py github              # GitHub Projects v2: discover / sync / check
+python main.py capture             # Captura texto → Notion Command Center
+python main.py classify            # Classifica texto e salva no DB correto
+python main.py telegram            # Inicia Telegram Bot (long-poll)
+python main.py daemon              # Daemon: Focus Guard + scheduler background
 ```
 
 ────────────────────────────────────────
@@ -373,46 +331,8 @@ python main.py calendar status     # Status da integração opcional
 
 - Estado operacional principal vive em Redis via [core/memory.py](./core/memory.py)
 - Alertas, handoffs, agenda, sessões e auditoria são persistidos por chave
-- Logs locais são gravados em arquivo configurado por `LOG_FILE`
-- A interface `/audit` expõe a trilha de eventos e a cauda do log
-- A agenda pode ser consultada e importada por intervalo em `/agenda`
-- Prompts e configs externos gerenciados via Sanity.io com cache de 5min e fallback para hardcoded
-
-────────────────────────────────────────
-
-## Documentation
-
-**Workspace & agent blueprints:** [AGENTS.md](./AGENTS.md) · [MEMORY.md](./MEMORY.md)
-
-```text
-▓▓▓ ENTRYPOINT
-────────────────────────────────────────
-└─ docs/INDEX.md                               índice mestre
-└─ ROADMAP.md                                  roadmap geral do produto
-└─ AGENTS.md                                   contexto workspace · operadores e IA
-└─ MEMORY.md                                   blueprints latentes · Notion / Railway / agenda
-
-▓▓▓ OPERAÇÃO
-────────────────────────────────────────
-└─ docs/operacao/MANUAL_USUARIO.md           uso do sistema (PWA)
-└─ docs/operacao/MANUAL_DEV.md               stack, rotas e superfícies
-└─ docs/operacao/redis-weekly-check.md       checklist semanal do Redis
-
-▓▓▓ GOVERNANÇA E ARQUITETURA
-────────────────────────────────────────
-└─ docs/governanca/CONTRATO_AGENTES.md       contrato operacional
-└─ docs/governanca/MATRIZ_GOVERNANCA_AGENTES.md
-└─ docs/arquitetura/SANITY_SCHEMA.md          histórico de schema Sanity
-└─ docs/arquitetura/SCHEMA_SIGNAL_DECISION.md ponte semântica externa
-
-▓▓▓ PLANEJAMENTO E ECOSSISTEMA
-────────────────────────────────────────
-└─ docs/planejamento/NEXTSTEPS.md            trilha de execução
-└─ docs/planejamento/SPRINT_VIDA.md           sprint vida
-└─ docs/planejamento/SPRINT_ECOSSISTEMA.md    sprint ecossistema
-└─ docs/ecossistema/ECOSSISTEMAS_ORGS.md      mapa das orgs
-└─ docs/ecossistema/ECOSSISTEMA_NEO_PROTOCOL.md
-```
+- Logs locais gravados em arquivo configurado por `LOG_FILE`
+- Mapa GitHub issue → Notion page em `state:github_projects:issue_notion_map`
 
 ────────────────────────────────────────
 
@@ -421,14 +341,14 @@ python main.py calendar status     # Status da integração opcional
 O deploy de produção está preparado para Railway:
 
 ```text
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ DEPLOY STACK                        ┃
-┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Builder        Dockerfile           ┃
-┃ Entrypoint      uvicorn web.app:app ┃
-┃ Healthcheck     /health             ┃
-┃ Persistence     Redis service       ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ DEPLOY STACK                              ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Builder         Dockerfile                ┃
+┃ Daemon          python main.py daemon     ┃
+┃ Telegram        python -m agents.telegram_bot ┃
+┃ Persistence     Redis service             ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
 Fluxo mínimo:
@@ -446,11 +366,41 @@ Fluxo mínimo:
 # suíte completa
 make test
 
-# modo silencioso
-make test-q
+# lint + testes
+make check
+```
 
-# cobertura
-make test-cov
+────────────────────────────────────────
+
+## Documentation
+
+**Workspace & agent blueprints:** [AGENTS.md](./AGENTS.md) · [MEMORY.md](./MEMORY.md)
+
+```text
+▓▓▓ ENTRYPOINT
+────────────────────────────────────────
+└─ docs/INDEX.md                               índice mestre
+└─ ROADMAP.md                                  roadmap geral do produto
+└─ AGENTS.md                                   contexto workspace · operadores e IA
+└─ MEMORY.md                                   blueprints latentes · Redis / Railway / agenda
+
+▓▓▓ OPERAÇÃO
+────────────────────────────────────────
+└─ docs/operacao/MANUAL_USUARIO.md           uso do sistema
+└─ docs/operacao/MANUAL_DEV.md               stack e superfícies
+└─ docs/operacao/redis-weekly-check.md       checklist semanal do Redis
+
+▓▓▓ GOVERNANÇA E ARQUITETURA
+────────────────────────────────────────
+└─ docs/governanca/CONTRATO_AGENTES.md       contrato operacional
+└─ docs/governanca/MATRIZ_GOVERNANCA_AGENTES.md
+└─ docs/arquitetura/SCHEMA_SIGNAL_DECISION.md ponte semântica externa
+
+▓▓▓ PLANEJAMENTO E ECOSSISTEMA
+────────────────────────────────────────
+└─ docs/planejamento/NEXTSTEPS.md            trilha de execução
+└─ docs/ecossistema/ECOSSISTEMAS_ORGS.md      mapa das orgs
+└─ docs/ecossistema/ECOSSISTEMA_NEO_PROTOCOL.md
 ```
 
 ────────────────────────────────────────
@@ -458,7 +408,7 @@ make test-cov
 ## Authorship
 
 - **Architecture & Lead:** NEØ MELLO
-- **Project Type:** Gate to access nodes multiagents // Ø
+- **Project Type:** Personal Operating System
 - **Direction:** transformar tarefas em sistema observável, reagente e persistente
 
 ────────────────────────────────────────

@@ -15,7 +15,15 @@ from pathlib import Path
 load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=True)
 
 # ---------------------------------------------------------------------------
-# LLM — OpenAI público (provider primário)
+# LLM — Azure OpenAI (NEOone, provider primário)
+# ---------------------------------------------------------------------------
+AZURE_OPENAI_API_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
+AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_DEPLOYMENT: str = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-oss-120b")
+AZURE_OPENAI_API_VERSION: str = os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
+
+# ---------------------------------------------------------------------------
+# LLM — OpenAI público (fallback cloud)
 # ---------------------------------------------------------------------------
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -29,18 +37,16 @@ LOCAL_MODEL_BASE_URL: str = os.getenv(
 LOCAL_MODEL_NAME: str = os.getenv("LOCAL_MODEL_NAME", "docker.io/ai/gemma3:4B-F16")
 
 # Sinal agregado — True se qualquer provider LLM está minimamente configurado
-LLM_CONFIGURED: bool = bool(OPENAI_API_KEY or LOCAL_MODEL_ENABLED)
+LLM_CONFIGURED: bool = bool(
+    (AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT)
+    or OPENAI_API_KEY
+    or LOCAL_MODEL_ENABLED
+)
 
 # ---------------------------------------------------------------------------
-# Notion — API + databases do NEØ Command Center (workspace "neoflw")
+# Notion — NEØ Command Center (destino de captura — capture_agent, github_projects)
 # ---------------------------------------------------------------------------
-NOTION_TOKEN: str = os.getenv("NOTION_TOKEN", "")  # Integration token
-
-# Databases originais (legado multiagents — mantidos p/ compatibilidade)
-NOTION_TASKS_DB_ID: str = os.getenv("NOTION_TASKS_DB_ID", "")
-NOTION_AGENDA_DB_ID: str = os.getenv("NOTION_AGENDA_DB_ID", "")
-
-# NEØ Command Center — destinos do Capture Agent (segundo cérebro)
+NOTION_TOKEN: str = os.getenv("NOTION_TOKEN", "")
 NOTION_DB_PROJETOS: str = os.getenv("NOTION_DB_PROJETOS", "")
 NOTION_DB_TAREFAS: str = os.getenv("NOTION_DB_TAREFAS", "")
 NOTION_DB_DECISOES: str = os.getenv("NOTION_DB_DECISOES", "")
@@ -52,12 +58,11 @@ NOTION_API_BASE: str = "https://api.notion.com/v1"
 NOTION_API_VERSION: str = "2022-06-28"
 
 # ---------------------------------------------------------------------------
-# Memória / persistência (Redis — Railway provisiona automaticamente)
+# Redis — fonte de verdade para estado operacional (Railway provisiona)
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).parent
 # No Railway use a rede interna: REDIS_URL=redis://default:PASS@redis.railway.internal:6379
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-MEMORY_DB_PATH: str = os.getenv("MEMORY_DB_PATH", str(BASE_DIR / "memory.db"))
 
 # ---------------------------------------------------------------------------
 # Telegram (captura inbound → Capture Agent)
@@ -71,16 +76,26 @@ TELEGRAM_ALLOWED_CHAT_IDS: list[int] = [
 ]
 
 # ---------------------------------------------------------------------------
-# GitHub Projects v2 (espelho para issues/tarefas de engenharia)
+# Linear (tracking de issues de engenharia)
+# ---------------------------------------------------------------------------
+LINEAR_API_KEY: str = os.getenv("LINEAR_API_KEY", "")
+LINEAR_TEAM_ID: str = os.getenv("LINEAR_TEAM_ID", "")
+
+# ---------------------------------------------------------------------------
+# GitHub Projects v2 (espelho GitHub → Notion DB)
 # ---------------------------------------------------------------------------
 GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")  # PAT com scopes: project, read:org, repo
-# Mapeamento org → project number (configurável via env)
 GITHUB_PROJECTS: dict[str, int] = {
     "flowpay-system": int(os.getenv("GH_PROJECT_FLOWPAY", "1")),
     "NEO-FlowOFF": int(os.getenv("GH_PROJECT_FLOWOFF", "1")),
     "NEO-PROTOCOL": int(os.getenv("GH_PROJECT_NEO", "1")),
     "neo-smart-factory": int(os.getenv("GH_PROJECT_FACTORY", "1")),
 }
+
+# GitHub Projects — Notion field mappings (configurável se o schema mudar)
+GITHUB_NOTION_STATUS_OPEN: str = os.getenv("GITHUB_NOTION_STATUS_OPEN", "📋 Backlog")
+GITHUB_NOTION_STATUS_CLOSED: str = os.getenv("GITHUB_NOTION_STATUS_CLOSED", "✅ Concluído")
+GITHUB_NOTION_PRIORITY_DEFAULT: str = os.getenv("GITHUB_NOTION_PRIORITY_DEFAULT", "⚡ Média")
 
 # ---------------------------------------------------------------------------
 # Focus Guard
@@ -94,51 +109,18 @@ LOG_FILE: str = os.getenv("LOG_FILE", str(BASE_DIR / "logs" / "agent_system.log"
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
 # ---------------------------------------------------------------------------
-# Linear (captura de issues via capture_agent)
-# ---------------------------------------------------------------------------
-LINEAR_API_KEY: str = os.getenv("LINEAR_API_KEY", "")
-LINEAR_TEAM_ID: str = os.getenv("LINEAR_TEAM_ID", "")
-
-# ---------------------------------------------------------------------------
-# Google Calendar (opcional)
-# ---------------------------------------------------------------------------
-GOOGLE_CREDENTIALS_FILE: str = os.getenv(
-    "GOOGLE_CREDENTIALS_FILE", str(BASE_DIR / "credentials.json")
-)
-GOOGLE_TOKEN_FILE: str = os.getenv("GOOGLE_TOKEN_FILE", str(BASE_DIR / "token.json"))
-GOOGLE_CALENDAR_ID: str = os.getenv("GOOGLE_CALENDAR_ID", "primary")
-
-# ---------------------------------------------------------------------------
 # Railway (ecosystem monitor)
 # ---------------------------------------------------------------------------
 RAILWAY_TOKEN: str = os.getenv("RAILWAY_TOKEN", "")
 RAILWAY_WORKSPACE_ID: str = os.getenv("RAILWAY_WORKSPACE_ID", "")
+RUNNING_ON_RAILWAY: bool = bool(os.getenv("RAILWAY_ENVIRONMENT"))
 
 # ---------------------------------------------------------------------------
-# Life Guard (rotinas pessoais)
+# Workspace root (github discover)
 # ---------------------------------------------------------------------------
-LIFE_GUARD_WATER_INTERVAL: int = int(os.getenv("LIFE_GUARD_WATER_INTERVAL", "90"))
-LIFE_GUARD_ACTIVE_HOUR_START: int = int(os.getenv("LIFE_GUARD_ACTIVE_HOUR_START", "8"))
-LIFE_GUARD_ACTIVE_HOUR_END: int = int(os.getenv("LIFE_GUARD_ACTIVE_HOUR_END", "22"))
-
-# ---------------------------------------------------------------------------
-# GitHub Projects — Notion field mappings (configurável se o schema mudar)
-# ---------------------------------------------------------------------------
-GITHUB_NOTION_STATUS_OPEN: str = os.getenv("GITHUB_NOTION_STATUS_OPEN", "📋 Backlog")
-GITHUB_NOTION_STATUS_CLOSED: str = os.getenv("GITHUB_NOTION_STATUS_CLOSED", "✅ Concluído")
-GITHUB_NOTION_PRIORITY_DEFAULT: str = os.getenv("GITHUB_NOTION_PRIORITY_DEFAULT", "⚡ Média")
 NEOMELLO_WORKSPACES_ROOT: str = os.getenv(
     "NEOMELLO_WORKSPACES_ROOT", "/Users/nettomello/neomello"
 )
-
-# ---------------------------------------------------------------------------
-# Web
-# ---------------------------------------------------------------------------
-WEB_HOST: str = os.getenv("WEB_HOST", "127.0.0.1")
-WEB_PORT: int = int(os.getenv("WEB_PORT", os.getenv("PORT", "8000")))
-
-# Flag de runtime (útil p/ logs)
-RUNNING_ON_RAILWAY: bool = bool(os.getenv("RAILWAY_ENVIRONMENT"))
 
 
 # ---------------------------------------------------------------------------
@@ -149,18 +131,20 @@ def validate_config() -> list[str]:
     warnings: list[str] = []
     if not LLM_CONFIGURED:
         warnings.append(
-            "Nenhum provider LLM configurado — defina OPENAI_API_KEY "
-            "ou LOCAL_MODEL_ENABLED=true."
+            "Nenhum provider LLM configurado — defina AZURE_OPENAI_API_KEY + "
+            "AZURE_OPENAI_ENDPOINT, ou OPENAI_API_KEY, ou LOCAL_MODEL_ENABLED=true."
         )
     if not NOTION_TOKEN:
-        warnings.append("NOTION_TOKEN não configurada — Notion Sync desabilitado.")
+        warnings.append(
+            "NOTION_TOKEN não configurada — capture_agent e github_projects desabilitados."
+        )
     if not LINEAR_API_KEY:
         warnings.append(
-            "LINEAR_API_KEY não configurada — Capture Agent não pode criar issues."
+            "LINEAR_API_KEY não configurada — linear_sync desabilitado."
         )
     if not LINEAR_TEAM_ID:
         warnings.append(
-            "LINEAR_TEAM_ID não configurada — Capture Agent não sabe em qual time criar issues."
+            "LINEAR_TEAM_ID não configurada — linear_sync não sabe em qual time criar issues."
         )
     if not TELEGRAM_BOT_TOKEN:
         warnings.append(

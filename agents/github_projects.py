@@ -15,7 +15,7 @@ from typing import Any, Optional
 
 import requests
 
-
+from adapters.notion import p_select, p_rich, p_title
 from config import (  # noqa: E402
     GITHUB_NOTION_PRIORITY_DEFAULT,
     GITHUB_NOTION_STATUS_CLOSED,
@@ -364,18 +364,6 @@ def notion_tarefas_diagnostic() -> str:
     return "\n".join(lines)
 
 
-def _p_title(text: str) -> dict:
-    return {"title": [{"text": {"content": text[:2000]}}]}
-
-
-def _p_rich(text: str) -> dict:
-    return {"rich_text": [{"text": {"content": text[:2000]}}]}
-
-
-def _p_select(name: str) -> dict:
-    return {"select": {"name": name}}
-
-
 def _issue_status_to_notion(state: str) -> str:
     s = (state or "").upper()
     if s in ("CLOSED", "MERGED"):
@@ -452,10 +440,10 @@ def sync_org_to_notion(
         )
         status = _issue_status_to_notion(it["state"])
         props: dict[str, Any] = {
-            "Tarefa": _p_title(title),
-            "Descrição": _p_rich(desc),
-            "Status": _p_select(status),
-            "Prioridade": _p_select(_PRIORITY_DEFAULT),
+            "Tarefa": p_title(title),
+            "Descrição": p_rich(desc),
+            "Status": p_select(status),
+            "Prioridade": p_select(_PRIORITY_DEFAULT),
         }
 
         page_id = issue_map.get(ikey)

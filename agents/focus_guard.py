@@ -54,7 +54,6 @@ ESCALATION_LEVELS = [
 
 # Estado interno do Focus Guard
 _state_key = "focus_guard_state"
-_stop_event = threading.Event()
 
 
 # Prompt para análise de desvio via LLM
@@ -397,69 +396,6 @@ def _run_focus_check(
 
     notifier.separator()
     return {"progress": progress, "analysis": analysis}
-
-
-_ecosystem_lock = threading.Lock()
-_github_lock = threading.Lock()
-
-
-def _fire_and_forget(fn, lock: threading.Lock, name: str) -> None:
-    if not lock.acquire(blocking=False):
-        notifier.info(f"{name} ainda em execução — pulando rodada.", AGENT_NAME)
-        return
-
-    def _run():
-        try:
-            fn()
-        except Exception as e:
-            notifier.warning(f"Erro em {name}: {e}", AGENT_NAME)
-        finally:
-            lock.release()
-
-    threading.Thread(target=_run, name=name, daemon=True).start()
-
-
-def _run_ecosystem_check() -> None:
-    def _do():
-        from agents import ecosystem_monitor as _eco
-        _eco.run()
-    _fire_and_forget(_do, _ecosystem_lock, "ecosystem_monitor")
-
-
-def _run_github_sync() -> None:
-    from config import GITHUB_TOKEN, NOTION_TOKEN
-    if not NOTION_TOKEN or not GITHUB_TOKEN:
-        notifier.info("github_sync ignorado: NOTION_TOKEN ou GITHUB_TOKEN ausente.", AGENT_NAME)
-        return
-
-    def _do():
-        from agents import github_projects as _gh
-        _gh.sync_all_orgs(dry_run=False)
-    _fire_and_forget(_do, _github_lock, "github_projects")
-
-
-def _background_loop() -> None:
-    interval = FOCUS_CHECK_INTERVAL_MINUTES
-
-    schedule.every(interval).minutes.do(_run_focus_check)
-    schedule.every(60).minutes.do(_run_ecosystem_check)
-    schedule.every(30).minutes.do(_run_github_sync)
-
-    try:
-        _run_focus_check()
-    except Exception as e:
-        notifier.warning(
-            f"Check inicial ignorado (Redis indisponível?): {e}", AGENT_NAME
-        )
-
-    while not _stop_event.is_set():
-        try:
-            schedule.run_pending()
-        except Exception as e:
-            notifier.warning(f"Erro no scheduler (ignorado): {e}", AGENT_NAME)
-        time.sleep(30)
-
-    notifier.info("Focus Guard encerrado.", AGENT_NAME)
 
 
 # ---------------------------------------------------------------------------

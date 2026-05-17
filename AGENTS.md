@@ -2,7 +2,7 @@
 
 # NEO PROTOCOL — ORGANIZATIONAL DESIGN
 ## File: AGENTS.md (Stateful Agent Roles)
-## Version: [IP_ADDRESS]
+## Version: v0.7.0
 ## Role: Chief Agent Architect (CAA)
 
 ```text
@@ -10,7 +10,7 @@
      MYPERSONAL MULTIAGENTS · AGENTS
 ========================================
 Status: ACTIVE
-Version: v0.5.1
+Version: v0.7.0
 Role: Personal OS Kernel
 ========================================
 ```
@@ -43,33 +43,58 @@ vinculado ao hub de coordenação em:
 O sistema opera em uma estrutura de fluxo:
 **Intention -> Agenda -> Execution -> Audit.**
 
+**LLM — cadeia de fallback (`core/openai_utils.py`):**
+- **Azure OpenAI (NEOone)**: Provider primário — `gpt-oss-120b`
+  via `https://neo-one.openai.azure.com/`.
+- **OpenAI público**: Fallback cloud (`gpt-4o-mini` → `gpt-3.5-turbo`).
+- **Local (Gemma3)**: Fallback dev opcional (`LOCAL_MODEL_ENABLED=true`).
+
 **Persistência:**
 - **Redis**: Fonte absoluta de verdade para estado operacional.
-- SQLite: Considerado legado (deprecated).
 
 **Fontes de Dados:**
-- **Notion**: Fonte primária para tarefas e agenda.
-- Google Calendar: Integração opcional.
+- **Linear**: Task store canônico — issues, sync e captura.
+- **Redis**: Estado operacional em tempo real (fonte de verdade).
+- **Notion**: Destino do espelho GitHub → Notion (`github_projects`).
+  Não é fonte de captura humana.
 
-**Governança:**
-- Gerenciada via **Notion (NEØ Command Center)**.
-- Fallbacks locais em YAML/JSON para resiliência.
+**Removidos (não reintroduzir sem decisão explícita):**
 - Sanity.io: Legado/Removido.
+- Google Calendar: Removido.
+- notion_sync bidirecional: Removido.
+- Life Guard: Removido (candidato a reintrodução mínima via Telegram).
+- Persona Manager: Removido (personas eram JSON locais + Sanity).
+- Retrospective: Removido (candidato a reescrita para Linear).
 
 ────────────────────────────────────────
 
-## ⍟ Matriz de Agentes
+## ⍟ Matriz de Agentes (9 ativos)
 
-Cada agente possui responsabilidades
-duras definidas no sistema:
+| Agente | Arquivo | Roteável? | Destino |
+|--------|---------|-----------|---------|
+| Orchestrator | `orchestrator.py` | — | Redis |
+| Focus Guard | `focus_guard.py` | ✓ | Redis |
+| Scheduler | `scheduler.py` | ✓ | Redis |
+| Validator | `validator.py` | ✓ | Redis |
+| Capture Agent | `capture_agent.py` | ✓ | Linear |
+| Linear Sync | `linear_sync.py` | ✓ | Redis ← Linear |
+| Telegram Bot | `telegram_bot.py` | — | long-poll inbound |
+| Ecosystem Monitor | `ecosystem_monitor.py` | ✗ | Redis (CLI/daemon) |
+| GitHub Projects | `github_projects.py` | ✗ | Notion DB |
 
-- **Orchestrator**: Roteia intenções e sintetiza respostas.
-- **Focus Guard**: Monitora sessões de foco e reagendamento.
-- **Life Guard**: Gere rotinas vitais (água, exercícios, finanças).
-- **Notion Sync**: Ponte bi-direcional entre kernel e humano.
+**Roteável:** exposto em `_AGENT_HANDLERS` do Orchestrator.
+**✗:** acessível apenas via CLI ou daemon.
 
-Consulte o [CONTRATO_AGENTES.md](file:///Users/nettomello/neomello/mypersonal_multiagents/docs/governanca/CONTRATO_AGENTES.md)
-para restrições específicas.
+**Responsabilidades:**
+- **Orchestrator**: Roteia intenções e sintetiza respostas via LLM.
+- **Focus Guard**: Monitora sessões de foco, escalada e reagendamento.
+- **Scheduler**: Cria, ordena e move blocos de agenda.
+- **Validator**: Valida conclusão de tarefas com evidências cruzadas.
+- **Capture Agent**: Classifica texto e cria issues no Linear.
+- **Linear Sync**: Importa issues do Linear para Redis (agenda/tarefas).
+- **Telegram Bot**: Inbound do segundo cérebro via long-poll HTTP.
+- **Ecosystem Monitor**: Monitora GitHub, Railway e on-chain em múltiplas orgs.
+- **GitHub Projects**: Espelha GitHub Projects v2 → Notion DB.
 
 ────────────────────────────────────────
 
@@ -81,22 +106,26 @@ para restrições específicas.
    `make check` -> **Conventional Commits** -> `git push`.
 3. **Acesso à Memória**: Toda modificação de estado
    DEVE passar por `core/memory.py` usando schemas Redis.
+4. **LLM**: Nunca passe `model=` direto — use sempre
+   `core.openai_utils.chat_completions(**kwargs)`.
 
 ────────────────────────────────────────
 
 ## ⨀ Interfaces e Contratos
 
-- **Notion**: Superfície opcional de entrada humana.
-- **Railway/Web**: Painel de controle primário e oficial.
-- **Dashboard**: Lê memória local via `memory.get_today_agenda()`.
+- **Linear**: Task store canônico — capture e sync.
+- **Notion**: Destino do espelho GitHub → `NOTION_DB_TAREFAS`.
+- **Telegram**: Superfície de entrada humana (inbound do segundo cérebro).
+- **CLI**: Interface primária de operação (`main.py`).
+- **Railway**: Deploy dos processos daemon e telegram.
 
 ────────────────────────────────────────
 
 ## ⚠️ Restrições Críticas
 
 - NUNCA crie novos bancos SQLite.
+- NUNCA crie notion_sync bidirecional — Notion é destino, não fonte.
 - SEMPRE valide `config.py` antes de mudar lógica.
-- Estilização: Use variáveis CSS (Design System) nativas.
 - Contexto: Prefira **[MEMORY.md](MEMORY.md)** para blueprints.
 
 ────────────────────────────────────────

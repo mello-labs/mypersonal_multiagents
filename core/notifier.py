@@ -222,7 +222,7 @@ def banner() -> None:
     separator()
     print(
         f"{Color.GRAY}  Agentes: Orchestrator · Scheduler · Focus Guard · "
-        f"Notion Sync · Validator{Color.RESET}"
+        f"Linear Sync · Validator{Color.RESET}"
     )
     separator()
     print()

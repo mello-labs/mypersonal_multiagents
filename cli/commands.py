@@ -7,7 +7,7 @@
 import argparse
 import re
 from datetime import date
-from typing import Optional
+from typing import Any, Optional
 
 from agents import (
     focus_guard,
@@ -17,6 +17,7 @@ from agents import (
     validator,
 )
 from core import memory, notifier
+
 
 def cmd_status() -> None:
     """Exibe status completo do sistema."""
@@ -138,8 +139,7 @@ def cmd_add_task() -> None:
     # Pergunta se quer adicionar bloco de agenda
     add_block = input("  Adicionar bloco de agenda hoje? [s/N]: ").strip().lower()
     if add_block == "s":
-        time_slot = input("  Bloco horário (ex: 09:00-10:00): ").strip()
-        if time_slot:
+        if time_slot := input("  Bloco horário (ex: 09:00-10:00): ").strip():
             scheduler.add_schedule_block(time_slot, title, task_id)
 
 
@@ -148,7 +148,9 @@ def cmd_sync() -> None:
     notifier.separator("SINCRONIZAÇÃO LINEAR")
     result = linear_sync.handle_handoff({"action": "sync"})
     if result.get("status") == "success":
-        notifier.success(f"Linear sync: {result.get('result', {}).get('message', 'ok')}")
+        notifier.success(
+            f"Linear sync: {result.get('result', {}).get('message', 'ok')}"
+        )
     else:
         notifier.error(f"Erro no sync: {result.get('result', {}).get('error', '?')}")
 
@@ -202,8 +204,9 @@ def cmd_focus_end() -> None:
         )
         if validate == "s":
             active_tasks = memory.get_tasks_by_status("Em progresso")
-            matched = next((t for t in active_tasks if t["title"] == task_title), None)
-            if matched:
+            if matched := next(
+                (t for t in active_tasks if t["title"] == task_title), None
+            ):
                 cmd_validate(matched["id"])
 
 
@@ -333,12 +336,61 @@ def cmd_demo() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _chat_read_input() -> Optional[str]:
+    """Lê input do usuário. Retorna None em EOF/Ctrl+C."""
+    try:
+        return input(f"\n{notifier.Color.CYAN}Você:{notifier.Color.RESET} ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+
+
+def _chat_dispatch_slash(cmd: str) -> bool:
+    """Executa comando especial. Retorna True se deve sair do loop."""
+    if cmd in ("quit", "exit", "sair"):
+        return True
+
+    simple: dict[str, Any] = {
+        "status": cmd_status,
+        "agenda": cmd_agenda,
+        "tasks": cmd_tasks,
+        "sync": cmd_sync,
+        "demo": cmd_demo,
+        "focus end": cmd_focus_end,
+    }
+    if handler := simple.get(cmd):
+        handler()
+        return False
+
+    parts = cmd.split()
+    if cmd.startswith("focus start"):
+        task_id = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else None
+        cmd_focus_start(task_id)
+    elif cmd.startswith("validate"):
+        task_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
+        cmd_validate(task_id)
+    else:
+        notifier.warning(f"Comando desconhecido: /{cmd}", "chat")
+
+    return False
+
+
+def _chat_process(user_input: str, history: list[dict]) -> None:
+    """Envia mensagem ao Orchestrator, imprime resposta e atualiza histórico."""
+    response = orchestrator.process(
+        user_input, context={"conversation_history": history}
+    )
+    print(
+        f"\n{notifier.Color.GREEN}{notifier.Color.BOLD}"
+        f"Assistente:{notifier.Color.RESET} {response}\n"
+    )
+    history.append({"user": user_input, "assistant": response[:200]})
+    if len(history) > 10:
+        history.pop(0)
+
+
 def cmd_chat() -> None:
-    """
-    Modo de chat interativo com o Orchestrator.
-    O usuário escreve em linguagem natural e o sistema delega aos agentes.
-    """
-    # Inicia o Focus Guard em background automaticamente
+    """Modo de chat interativo com o Orchestrator."""
     if not focus_guard.is_running():
         focus_guard.start_guard()
 
@@ -349,66 +401,19 @@ def cmd_chat() -> None:
     )
     notifier.separator()
 
-    conversation_history = []
+    history: list[dict] = []
 
     while True:
-        try:
-            user_input = input(
-                f"\n{notifier.Color.CYAN}Você:{notifier.Color.RESET} "
-            ).strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
+        user_input = _chat_read_input()
+        if user_input is None:
             break
-
         if not user_input:
             continue
-
-        # Comandos especiais com /
         if user_input.startswith("/"):
-            cmd = user_input.lstrip("/").lower()
-            if cmd in ("quit", "exit", "sair"):
+            if _chat_dispatch_slash(user_input.lstrip("/").lower()):
                 break
-            elif cmd == "status":
-                cmd_status()
-            elif cmd == "agenda":
-                cmd_agenda()
-            elif cmd == "tasks":
-                cmd_tasks()
-            elif cmd == "sync":
-                cmd_sync()
-            elif cmd == "demo":
-                cmd_demo()
-            elif cmd.startswith("focus start"):
-                parts = cmd.split()
-                task_id = (
-                    int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else None
-                )
-                cmd_focus_start(task_id)
-            elif cmd == "focus end":
-                cmd_focus_end()
-            elif cmd.startswith("validate"):
-                parts = cmd.split()
-                task_id = (
-                    int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
-                )
-                cmd_validate(task_id)
-            else:
-                notifier.warning(f"Comando desconhecido: /{cmd}", "chat")
             continue
-
-        # Processa via Orchestrator
-        response = orchestrator.process(
-            user_input, context={"conversation_history": conversation_history}
-        )
-
-        print(
-            f"\n{notifier.Color.GREEN}{notifier.Color.BOLD}Assistente:{notifier.Color.RESET} {response}\n"
-        )
-
-        # Mantém histórico resumido (últimas 10 trocas)
-        conversation_history.append({"user": user_input, "assistant": response[:200]})
-        if len(conversation_history) > 10:
-            conversation_history.pop(0)
+        _chat_process(user_input, history)
 
     notifier.info("Saindo do modo interativo.", "chat")
 
@@ -444,28 +449,29 @@ def cmd_retrospective() -> None:
 
 
 def cmd_web() -> None:
-    """Inicia a interface web."""
-    import uvicorn
-
-    from config import WEB_HOST, WEB_PORT
-
-    notifier.info(f"Iniciando interface web em http://{WEB_HOST}:{WEB_PORT}", "web")
-    uvicorn.run("web.app:app", host=WEB_HOST, port=WEB_PORT, reload=False)
+    """Interface web removida nesta versão."""
+    notifier.warning("Interface web não está disponível nesta versão.", "web")
 
 
 def cmd_calendar_auth() -> None:
     """Calendar sync removido nesta versão."""
-    notifier.warning("Google Calendar sync não está disponível nesta versão.", "calendar")
+    notifier.warning(
+        "Google Calendar sync não está disponível nesta versão.", "calendar"
+    )
 
 
 def cmd_calendar_import() -> None:
     """Calendar sync removido nesta versão."""
-    notifier.warning("Google Calendar sync não está disponível nesta versão.", "calendar")
+    notifier.warning(
+        "Google Calendar sync não está disponível nesta versão.", "calendar"
+    )
 
 
 def cmd_calendar_status() -> None:
     """Calendar sync removido nesta versão."""
-    notifier.warning("Google Calendar sync não está disponível nesta versão.", "calendar")
+    notifier.warning(
+        "Google Calendar sync não está disponível nesta versão.", "calendar"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -485,7 +491,7 @@ Exemplos:
   python main.py agenda              # Agenda de hoje
   python main.py tasks               # Lista de tarefas
   python main.py add-task            # Wizard para nova tarefa
-  python main.py sync                # Sincroniza com Notion
+  python main.py sync                # Sincroniza com Linear
   python main.py suggest             # Sugestão de agenda via LLM
   python main.py focus start 3       # Foca na tarefa ID 3
   python main.py focus end           # Encerra sessão de foco
@@ -512,7 +518,7 @@ Exemplos:
     subparsers.add_parser("add-task", help="Wizard para adicionar nova tarefa")
 
     # sync
-    subparsers.add_parser("sync", help="Sincroniza com Notion")
+    subparsers.add_parser("sync", help="Sincroniza com Linear")
 
     # suggest
     subparsers.add_parser("suggest", help="Sugere agenda otimizada via LLM")
@@ -647,9 +653,7 @@ def cmd_capture(text: str) -> None:
 
     result = capture_agent.capture(text, source="cli")
     if result.get("status") == "ok":
-        notifier.success(
-            f"[{result['category']}] → {result['destination']}", "capture"
-        )
+        notifier.success(f"[{result['category']}] → {result['destination']}", "capture")
         if result.get("notion_url"):
             print(f"  {result['notion_url']}")
     else:
@@ -677,13 +681,12 @@ def cmd_github(args) -> None:
             )
             notifier.separator("GITHUB → NOTION")
             notifier.info(f"{args.org}: criadas={c} atualizadas={u}", "github")
-            notifier.separator()
         else:
             res = github_projects.sync_all_orgs(dry_run=args.dry_run)
             notifier.separator("GITHUB → NOTION (todas as orgs)")
             for org, (c, u) in res.items():
                 notifier.info(f"{org}: criadas={c} atualizadas={u}", "github")
-            notifier.separator()
+        notifier.separator()
     elif args.github_action == "reset-map":
         github_projects.clear_issue_notion_map()
         notifier.success(

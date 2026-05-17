@@ -14,7 +14,7 @@ Saídas:
 Não faz:
   - alterar agenda íntima automaticamente
   - publicar nada diretamente
-  - chamar focus_guard ou life_guard
+  - chamar focus_guard
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ import requests
 import redis
 from typing import Any
 
-from config import GITHUB_TOKEN, RAILWAY_TOKEN, RAILWAY_WORKSPACE_ID
+from config import GITHUB_TOKEN
 from core import memory, notifier
 
 AGENT_NAME = "ecosystem_monitor"

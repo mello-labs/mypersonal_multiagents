@@ -5,7 +5,7 @@
 # delega via handoffs e consolida as respostas em linguagem natural.
 #
 # Fluxo de handoff:
-#   Usuário → Orchestrator → [Scheduler | FocusGuard | NotionSync | Validator]
+#   Usuário → Orchestrator → [Scheduler | FocusGuard | LinearSync | Validator]
 #                                      ↓
 #                          Resposta consolidada → Usuário
 #
@@ -159,11 +159,11 @@ def _get_routing_prompt() -> str:
     return _ROUTING_PROMPT_FALLBACK
 
 
-def _build_synthesis_prompt(persona_id: Optional[str] = None) -> str:
+def _build_synthesis_prompt() -> str:
     return _SYNTHESIS_BASE
 
 
-def _build_direct_prompt(persona_id: Optional[str] = None) -> str:
+def _build_direct_prompt() -> str:
     return _DIRECT_BASE
 
 
@@ -575,10 +575,9 @@ def synthesize_response(
     intent: str,
     handoff_results: list[dict],
     context: Optional[dict] = None,
-    persona_id: Optional[str] = None,
 ) -> str:
     """
-    Usa o GPT-GPT-4o-mini para sintetizar os resultados dos agentes em resposta natural.
+    Usa o LLM para sintetizar os resultados dos agentes em resposta natural.
     """
     fast_path = _format_focus_response(handoff_results)
     if fast_path:
@@ -588,7 +587,7 @@ def synthesize_response(
     history_text = _context_history_text(context)
     history_block = f"Histórico recente:\n{history_text}\n\n" if history_text else ""
 
-    synthesis_prompt = _build_synthesis_prompt(persona_id)
+    synthesis_prompt = _build_synthesis_prompt()
 
     messages = [
         {"role": "system", "content": synthesis_prompt},
@@ -630,7 +629,6 @@ Forneça uma resposta útil e clara ao usuário.""",
 def process(
     user_input: str,
     context: Optional[dict] = None,
-    persona_id: Optional[str] = None,
 ) -> str:
     """
     Pipeline completo: input → roteamento → execução → síntese → resposta.
@@ -638,7 +636,6 @@ def process(
     Args:
         user_input: Comando/pergunta do usuário em linguagem natural.
         context:    Contexto extra opcional (ex: conversa anterior).
-        persona_id: ID da persona ativa (None = persona padrão).
 
     Returns:
         Resposta final em texto para exibir ao usuário.
@@ -666,7 +663,7 @@ def process(
         if routing.get("intent") == "capabilities_runtime":
             return _runtime_capabilities_response(context)
         notifier.info("Nenhum agente necessário — respondendo diretamente.", AGENT_NAME)
-        return _direct_response(user_input, context, persona_id)
+        return _direct_response(user_input, context)
 
     results = execute_handoffs(handoffs)
 
@@ -676,7 +673,6 @@ def process(
         intent=routing.get("intent", ""),
         handoff_results=results,
         context=context,
-        persona_id=persona_id,
     )
 
     notifier.separator()
@@ -686,13 +682,12 @@ def process(
 def _direct_response(
     user_input: str,
     context: Optional[dict] = None,
-    persona_id: Optional[str] = None,
 ) -> str:
     """Resposta direta do Orchestrator para perguntas simples sem agentes."""
     history_text = _context_history_text(context)
     history_block = f"Histórico recente:\n{history_text}\n\n" if history_text else ""
 
-    direct_prompt = _build_direct_prompt(persona_id)
+    direct_prompt = _build_direct_prompt()
 
     try:
         response = chat_completions(
