@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 # Carrega o .env localizado na raiz do projeto (dev local apenas)
-load_dotenv(dotenv_path=Path(__file__).parent / ".env")
+load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=True)
 
 # ---------------------------------------------------------------------------
 # LLM — OpenAI público (provider primário)

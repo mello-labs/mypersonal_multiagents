@@ -34,11 +34,11 @@ RED    := $(shell printf '\033[31m')
 RESET  := $(shell printf '\033[0m')
 MAGENTA:= $(shell printf '\033[35m')
 
-# Redis Config
+# Redis Config (local dev only — main.py/web use REDIS_URL from .env)
 REDIS_CONTAINER := multiagentes-redis
 REDIS_PORT      := 6379
 REDIS_HOST      := 127.0.0.1
-REDIS_URL       := redis://$(REDIS_HOST):$(REDIS_PORT)/0
+REDIS_LOCAL_URL := redis://$(REDIS_HOST):$(REDIS_PORT)/0
 
 # -----------------------------------------------------------------------------
 # DEFAULT GOAL
@@ -80,30 +80,30 @@ commit: check security ## [NΞØ] Secure commit & push flow (The Protocol)
 # -----------------------------------------------------------------------------
 
 .PHONY: dev
-dev: redis-ready ## Start Kernel Web UI (FastAPI + Hot Reload)
+dev: redis-ready ## Start Web UI locally (FastAPI + Hot Reload, local Redis)
 	@printf "$(CYAN)🚀 Launching UI at http://localhost:8000...$(RESET)\n"
-	@REDIS_URL=$(REDIS_URL) $(UVICORN) web.app:app --host 127.0.0.1 --port 8000 --reload
+	@REDIS_URL=$(REDIS_LOCAL_URL) $(UVICORN) web.app:app --host 127.0.0.1 --port 8000 --reload
 
 .PHONY: dev-ui
-dev-ui: redis-ready ## Start UI with deep watch for templates/CSS/JS
+dev-ui: redis-ready ## Start Web UI with deep asset watch (local Redis)
 	@printf "$(CYAN)🎨 Launching UI with deep asset watch...$(RESET)\n"
-	@REDIS_URL=$(REDIS_URL) $(UVICORN) web.app:app --host 127.0.0.1 --port 8000 --reload \
+	@REDIS_URL=$(REDIS_LOCAL_URL) $(UVICORN) web.app:app --host 127.0.0.1 --port 8000 --reload \
 		--reload-include '*.py' \
 		--reload-include 'web/templates/**/*.html' \
 		--reload-include 'web/static/**/*.css' \
 		--reload-include 'web/static/**/*.js'
 
 .PHONY: guard
-guard: redis-ready ## Start Focus Guard daemon (background loop)
+guard: ## Start Focus Guard daemon (uses REDIS_URL from .env)
 	@printf "$(CYAN)🛡️ Focus Guard Active...$(RESET)\n"
 	@$(PY) main.py daemon
 
 .PHONY: sync
-sync: redis-ready ## Synchronize Linear issues
+sync: ## Synchronize Linear issues (uses REDIS_URL from .env)
 	@$(PY) main.py sync
 
 .PHONY: chat
-chat: redis-ready ## Interactive Orchestrator Shell
+chat: ## Interactive Orchestrator Shell (uses REDIS_URL from .env)
 	@$(PY) main.py chat
 
 # -----------------------------------------------------------------------------
@@ -150,12 +150,12 @@ redis-ready: ## Ensure Redis is responsive (Local/Docker)
 	@sleep 1
 
 .PHONY: redis-stats
-redis-stats: ## Display Redis memory and command stats
+redis-stats: ## Display local Redis memory and command stats
 	@redis-cli INFO stats | grep -E "connected|commands|memory|keys" || \
 	docker exec $(REDIS_CONTAINER) redis-cli INFO stats | grep -E "connected|commands|memory|keys"
 
 .PHONY: redis-keys
-redis-keys: ## List all keys in Redis
+redis-keys: ## List all keys in local Redis
 	@redis-cli KEYS '*' | sort || docker exec $(REDIS_CONTAINER) redis-cli KEYS '*'
 
 .PHONY: redis-flush
@@ -205,13 +205,14 @@ venv:
 	@test -d $(VENV) || $(PYTHON) -m venv $(VENV)
 
 .PHONY: install
-install: venv
+install: venv ## Install project + dev dependencies into venv
 	@$(PIP) install --upgrade pip -q
 	@$(PIP) install -r requirements.txt -q
 	@$(PIP) install ruff pytest pip-audit ipython -q
+	@printf "$(GREEN)✓ Dependencies installed.$(RESET)\n"
 
 .PHONY: env-init
-env-init:
+env-init: ## Copy .env.example → .env (skips if .env already exists)
 	@test -f .env || cp .env.example .env
 
 .PHONY: clean
