@@ -65,6 +65,36 @@ def _send(chat_id: int, text: str, reply_to: Optional[int] = None) -> None:
         notifier.warning(f"Falha ao enviar msg Telegram: {exc}", AGENT_NAME)
 
 
+def send_focus_keyboard(text: str, session_id: str, phase: str = "1") -> None:
+    """Envia mensagem com InlineKeyboardMarkup para todos os chats autorizados."""
+    if not TELEGRAM_ALLOWED_CHAT_IDS:
+        return
+    sid = str(session_id)
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "✅ Concluído", "callback_data": f"done:{sid}"},
+                {"text": "➡️ Fase seguinte", "callback_data": f"next:{sid}:{phase}"},
+            ],
+            [
+                {"text": "⏱ +1h", "callback_data": f"extend:{sid}"},
+                {"text": "🚧 Bloqueado", "callback_data": f"blocked:{sid}"},
+            ],
+        ]
+    }
+    for chat_id in TELEGRAM_ALLOWED_CHAT_IDS:
+        try:
+            _api(
+                "sendMessage",
+                chat_id=chat_id,
+                text=text[:4000],
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+        except Exception as exc:
+            notifier.warning(f"Falha ao enviar teclado Telegram para {chat_id}: {exc}", AGENT_NAME)
+
+
 # ---------------------------------------------------------------------------
 # Autorização
 # ---------------------------------------------------------------------------
@@ -143,6 +173,74 @@ def _handle_command(cmd: str, rest: str, chat_id: int, message_id: int) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Callbacks de botões inline (focus guard)
+# ---------------------------------------------------------------------------
+
+
+def handle_callback(action: str, session_id: str, phase: str = "1") -> dict:
+    """Executa a ação do botão inline. Retorna {"ok": bool, "text": str}."""
+    try:
+        sid = int(session_id)
+    except (ValueError, TypeError):
+        return {"ok": False, "text": "session_id inválido"}
+
+    if action == "done":
+        memory.end_focus_session(sid, status="completed")
+        return {"ok": True, "text": "✅ Sessão concluída!"}
+
+    if action == "next":
+        memory.end_focus_session(sid, status="completed", notes=f"avançou para fase {phase}")
+        return {"ok": True, "text": f"➡️ Fase {phase} registrada. Iniciando próxima."}
+
+    if action == "extend":
+        session = memory.get_active_focus_session()
+        if session and session.get("id") == sid:
+            current = int(session.get("planned_minutes") or 25)
+            from core.memory import _r  # type: ignore[attr-defined]
+            _r().hset(f"session:{sid}", "planned_minutes", str(current + 60))
+            return {"ok": True, "text": f"⏱ +1h adicionada (total: {current + 60} min)"}
+        return {"ok": False, "text": "Sessão não encontrada ou já encerrada"}
+
+    if action == "blocked":
+        memory.end_focus_session(sid, status="blocked")
+        memory.create_alert("focus_blocked", f"Sessão {sid} marcada como bloqueada via Telegram")
+        return {"ok": True, "text": "🚧 Sessão marcada como bloqueada"}
+
+    return {"ok": False, "text": f"Ação desconhecida: {action}"}
+
+
+def _process_callback(cq: dict) -> None:
+    """Processa callback_query de botão inline."""
+    cq_id = cq.get("id", "")
+    from_user = cq.get("from", {})
+    chat_id = cq.get("message", {}).get("chat", {}).get("id")
+    data = cq.get("data", "")
+
+    if chat_id and not _is_authorized(chat_id):
+        try:
+            _api("answerCallbackQuery", callback_query_id=cq_id, text="⛔ Não autorizado")
+        except Exception:
+            pass
+        return
+
+    parts = data.split(":", 2)
+    action = parts[0] if len(parts) >= 1 else ""
+    session_id = parts[1] if len(parts) >= 2 else ""
+    phase = parts[2] if len(parts) >= 3 else "1"
+
+    result = handle_callback(action, session_id, phase)
+    try:
+        _api(
+            "answerCallbackQuery",
+            callback_query_id=cq_id,
+            text=result["text"][:200],
+            show_alert=not result["ok"],
+        )
+    except Exception as exc:
+        notifier.warning(f"answerCallbackQuery falhou: {exc}", AGENT_NAME)
+
+
+# ---------------------------------------------------------------------------
 # Captura
 # ---------------------------------------------------------------------------
 
@@ -170,10 +268,12 @@ def _run_capture(text: str, chat_id: int, message_id: int, forced_action: Option
     r = resp["result"]
     title = r.get("title", "(sem título)")
     dest = r.get("destination", r.get("category", "?"))
-    url = r.get("notion_url", "")
+    url = r.get("issue_url", "")
+    identifier = r.get("identifier", "")
     msg = f"✅ <b>{dest}</b>\n<i>{title}</i>"
     if url:
-        msg += f'\n<a href="{url}">abrir no Notion →</a>'
+        label = identifier if identifier else "abrir no Linear"
+        msg += f'\n<a href="{url}">{label} →</a>'
     _send(chat_id, msg, reply_to=message_id)
 
 
@@ -183,6 +283,10 @@ def _run_capture(text: str, chat_id: int, message_id: int, forced_action: Option
 
 
 def _process_update(update: dict) -> None:
+    if "callback_query" in update:
+        _process_callback(update["callback_query"])
+        return
+
     msg = update.get("message") or update.get("edited_message")
     if not msg:
         return
@@ -244,7 +348,7 @@ def run() -> None:
                 "getUpdates",
                 offset=offset + 1 if offset else None,
                 timeout=50,
-                allowed_updates=["message", "edited_message"],
+                allowed_updates=["message", "edited_message", "callback_query"],
             )
         except Exception as exc:
             notifier.warning(f"getUpdates falhou ({exc}) — retry em 5s", AGENT_NAME)

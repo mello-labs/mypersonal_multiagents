@@ -100,6 +100,12 @@ NOTION_SYNC_INTERVAL_MINUTES: int = int(os.getenv("NOTION_SYNC_INTERVAL", "5"))
 NOTION_RETROSPECTIVE_PAGE_ID: str = os.getenv("NOTION_RETROSPECTIVE_PAGE_ID", "")
 
 # ---------------------------------------------------------------------------
+# Linear (captura de issues via capture_agent)
+# ---------------------------------------------------------------------------
+LINEAR_API_KEY: str = os.getenv("LINEAR_API_KEY", "")
+LINEAR_TEAM_ID: str = os.getenv("LINEAR_TEAM_ID", "")
+
+# ---------------------------------------------------------------------------
 # Google Calendar (opcional)
 # ---------------------------------------------------------------------------
 GOOGLE_CREDENTIALS_FILE: str = os.getenv(
@@ -131,19 +137,13 @@ def validate_config() -> list[str]:
         )
     if not NOTION_TOKEN:
         warnings.append("NOTION_TOKEN não configurada — Notion Sync desabilitado.")
-    # Os 5 DBs do Command Center são opcionais individualmente, mas avisa se
-    # nenhum deles estiver configurado (capture_agent fica mudo)
-    command_center_dbs = [
-        NOTION_DB_PROJETOS,
-        NOTION_DB_TAREFAS,
-        NOTION_DB_DECISOES,
-        NOTION_DB_WORKLOG,
-        NOTION_DB_INTEGRATIONS,
-    ]
-    if not any(command_center_dbs):
+    if not LINEAR_API_KEY:
         warnings.append(
-            "Nenhum NOTION_DB_* do Command Center configurado — "
-            "Capture Agent não tem destino. Configure ao menos um."
+            "LINEAR_API_KEY não configurada — Capture Agent não pode criar issues."
+        )
+    if not LINEAR_TEAM_ID:
+        warnings.append(
+            "LINEAR_TEAM_ID não configurada — Capture Agent não sabe em qual time criar issues."
         )
     if not TELEGRAM_BOT_TOKEN:
         warnings.append(

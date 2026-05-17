@@ -19,8 +19,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Importações locais que dependem do sys.path hack acima
-from agents import notion_sync as _notion_sync  # noqa: E402  # pylint: disable=wrong-import-position
-from core import memory, notifier, sanity_client  # noqa: E402  # pylint: disable=wrong-import-position
+from core import memory, notifier  # noqa: E402  # pylint: disable=wrong-import-position
 from core.openai_utils import chat_completions  # noqa: E402  # pylint: disable=wrong-import-position
 
 AGENT_NAME = "validator"
@@ -56,9 +55,7 @@ Critérios para "pending_confirmation":
 
 
 def _get_validator_prompt() -> str:
-    return sanity_client.get_prompt(
-        "validator", "validation", _VALIDATOR_PROMPT_FALLBACK
-    )
+    return _VALIDATOR_PROMPT_FALLBACK
 
 
 # ---------------------------------------------------------------------------
@@ -78,21 +75,7 @@ def gather_evidence(task_id: int) -> dict:
     focus_sessions = memory.get_focus_sessions_for_task(task_id)
     agenda_blocks = memory.get_agenda_blocks_for_task(task_id)
 
-    # Informações do Notion (se disponível)
     notion_data = None
-    if task.get("notion_page_id"):
-        try:
-            notion_tasks = _notion_sync.fetch_notion_tasks()
-            notion_data = next(
-                (
-                    nt
-                    for nt in notion_tasks
-                    if nt["notion_page_id"] == task["notion_page_id"]
-                ),
-                None,
-            )
-        except Exception as e:
-            notion_data = {"error": str(e)}
 
     return {
         "task": task,
@@ -119,12 +102,6 @@ def check_data_consistency(evidence: dict) -> dict:
         "has_completed_session": any(s.get("status") == "completed" for s in sessions),
         "has_any_session": len(sessions) > 0,
         "block_completed": any(b.get("completed") for b in blocks),
-        "notion_synced": notion is not None and "error" not in str(notion),
-        "notion_status_matches": (
-            notion is not None and notion.get("status") == task.get("status")
-            if notion and "error" not in str(notion)
-            else None
-        ),
     }
 
     # Score de consistência (0-100)
@@ -132,13 +109,11 @@ def check_data_consistency(evidence: dict) -> dict:
     if flags["local_status_is_done"]:
         score += 30
     if flags["has_actual_time"]:
-        score += 20
-    if flags["has_completed_session"]:
         score += 25
+    if flags["has_completed_session"]:
+        score += 30
     if flags["block_completed"]:
         score += 15
-    if flags["notion_status_matches"]:
-        score += 10
 
     flags["consistency_score"] = score
     return flags
@@ -238,15 +213,6 @@ def apply_verdict(task_id: int, verdict: dict) -> dict:
         # Confirma como concluído com timestamp
         actual_time = datetime.now().strftime("%Y-%m-%d %H:%M")
         memory.update_task_status(task_id, "Concluído", actual_time)
-
-        # Atualiza Notion se vinculado
-        if task and task.get("notion_page_id"):
-            try:
-                _notion_sync.update_notion_task_status(
-                    task["notion_page_id"], "Concluído", actual_time
-                )
-            except Exception as e:
-                notifier.warning(f"Não foi possível atualizar Notion: {e}", AGENT_NAME)
 
         notifier.success(
             f"✅ Tarefa '{task.get('title', task_id)}' VALIDADA como concluída!",

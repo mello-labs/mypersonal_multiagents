@@ -22,13 +22,9 @@ import schedule
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agents import notion_sync as _notion_sync
 from agents import scheduler as _scheduler
-from config import (
-    FOCUS_CHECK_INTERVAL_MINUTES,
-    NOTION_SYNC_INTERVAL_MINUTES,
-)
-from core import memory, notifier, sanity_client
+from config import FOCUS_CHECK_INTERVAL_MINUTES
+from core import memory, notifier
 from core.openai_utils import chat_completions
 
 AGENT_NAME = "focus_guard"
@@ -85,9 +81,7 @@ Retorne JSON com:
 
 
 def _get_deviation_prompt() -> str:
-    return sanity_client.get_prompt(
-        "focus_guard", "deviation", _DEVIATION_PROMPT_FALLBACK
-    )
+    return _DEVIATION_PROMPT_FALLBACK
 
 
 def _get_runtime_environment() -> str:
@@ -95,25 +89,7 @@ def _get_runtime_environment() -> str:
 
 
 def _get_intervention_levels() -> list[dict]:
-    scripts = sanity_client.get_intervention_scripts(AGENT_NAME)
-    current_env = _get_runtime_environment()
-    levels = []
-    for script in scripts:
-        scope = script.get("environment_scope", "all")
-        if scope not in {"all", current_env}:
-            continue
-        levels.append(
-            {
-                "minutes": script.get("trigger_minutes"),
-                "channel": script.get("channel", "log_only"),
-                "sound": script.get("sound", False),
-                "msg": script.get("message", ""),
-                "title": script.get("title", "NEO Focus Guard"),
-            }
-        )
-
-    levels = [level for level in levels if isinstance(level.get("minutes"), int)]
-    return levels or ESCALATION_LEVELS
+    return ESCALATION_LEVELS
 
 
 # ---------------------------------------------------------------------------
@@ -359,6 +335,18 @@ def _run_focus_check(
             )
         except Exception:
             pass
+        try:
+            from agents import telegram_bot as _tg  # lazy — evita circular import
+            session_id = str(active.get("id", ""))
+            task_title = active.get("task_title", "?")
+            msg = (
+                f"🎯 <b>Check-in</b>\n"
+                f"Tarefa: <i>{task_title}</i>\n"
+                f"Desvio: <b>{analysis.get('deviation_level', 'none')}</b>"
+            )
+            _tg.send_focus_keyboard(msg, session_id=session_id)
+        except Exception as exc:
+            notifier.warning(f"Falha ao enviar teclado Telegram: {exc}", AGENT_NAME)
 
     # Mensagem de análise
     deviation = analysis.get("deviation_level", "none")
@@ -413,31 +401,12 @@ def _run_focus_check(
                 AGENT_NAME,
             )
 
-    # Life Guard — rotinas pessoais
-    try:
-        from agents import life_guard as _life_guard
-
-        _life_guard.run_all_checks()
-    except Exception as e:
-        notifier.warning(f"Life Guard check ignorado: {e}", AGENT_NAME)
-
     notifier.separator()
     return {"progress": progress, "analysis": analysis}
 
 
-def _run_differential_sync() -> None:
-    """Callback do scheduler para sync diferencial periódico."""
-    try:
-        count = _notion_sync.sync_differential()
-        if count:
-            notifier.info(f"Auto-sync: {count} tarefa(s) sincronizada(s).", AGENT_NAME)
-    except Exception as e:
-        notifier.warning(f"Erro no auto-sync diferencial: {e}", AGENT_NAME)
-
-
 _ecosystem_lock = threading.Lock()
 _github_lock = threading.Lock()
-_retrospective_lock = threading.Lock()
 
 
 def _fire_and_forget(fn, lock: threading.Lock, name: str) -> None:
@@ -476,44 +445,18 @@ def _run_github_sync() -> None:
     _fire_and_forget(_do, _github_lock, "github_projects")
 
 
-def _run_retrospective() -> None:
-    def _do():
-        from agents import retrospective as _retro
-        _retro.run_retrospective(push_to_notion=True)
-    _fire_and_forget(_do, _retrospective_lock, "retrospective")
-
-
 def _background_loop() -> None:
     """Thread principal do Focus Guard — roda o scheduler.run_pending() em loop."""
-    # Lê configuração do Sanity; cai nos valores de env/config.py se indisponível
-    cfg = sanity_client.get_agent_config(AGENT_NAME) or {}
-    if not cfg.get("enabled", True):
-        notifier.warning(
-            "Focus Guard desabilitado via Sanity (agent_config.enabled=false). Encerrando loop.",
-            AGENT_NAME,
-        )
-        return
-    interval = int(cfg.get("check_interval_minutes") or FOCUS_CHECK_INTERVAL_MINUTES)
-    if interval != FOCUS_CHECK_INTERVAL_MINUTES:
-        notifier.info(
-            f"Intervalo de check lido do Sanity: {interval} min (env={FOCUS_CHECK_INTERVAL_MINUTES}).",
-            AGENT_NAME,
-        )
+    interval = FOCUS_CHECK_INTERVAL_MINUTES
 
     # Configura o job periódico de check de foco
     schedule.every(interval).minutes.do(_run_focus_check)
-
-    # Configura sync diferencial periódico
-    schedule.every(NOTION_SYNC_INTERVAL_MINUTES).minutes.do(_run_differential_sync)
 
     # Ecosystem: health check a cada 60 min
     schedule.every(60).minutes.do(_run_ecosystem_check)
 
     # GitHub Projects: sync a cada 30 min (fire-and-forget, com guard de pré-requisitos)
     schedule.every(30).minutes.do(_run_github_sync)
-
-    # Retrospective: semanalmente às 21h, toda segunda-feira
-    schedule.every().monday.at("21:00").do(_run_retrospective)
 
     # Executa uma verificação imediata ao iniciar (protegida contra falha de Redis)
     try:

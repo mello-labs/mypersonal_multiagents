@@ -24,22 +24,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Importa os agentes especialistas
 from agents import (  # noqa: E402
-    calendar_sync,
     capture_agent,
     focus_guard,
-    notion_sync,
-    retrospective,
+    linear_sync,
     scheduler,
     validator,
 )
-from agents.persona_manager import (  # noqa: E402
-    get_direct_prompt,
-    get_persona,
-    get_synthesis_prompt,
-    get_system_prompt,
-    get_temperature,
-)
-from core import memory, notifier, sanity_client  # noqa: E402
+from core import memory, notifier  # noqa: E402
 from core.openai_utils import chat_completions  # noqa: E402
 
 AGENT_NAME = "orchestrator"
@@ -72,35 +63,12 @@ AGENTS_REGISTRY = {
             "get_alerts",
         ],
     },
-    "notion_sync": {
-        "description": "Cria/atualiza tarefas e agenda no Notion via API REST.",
-        "actions": [
-            "create_task",
-            "update_status",
-            "sync_from_notion",
-            "get_today_agenda",
-        ],
-    },
     "validator": {
         "description": "Valida cruzando evidências se uma tarefa foi realmente concluída.",
         "actions": [
             "validate_task",
             "validate_all",
             "get_evidence",
-        ],
-    },
-    "retrospective": {
-        "description": "Gera relatório de retrospectiva semanal com métricas e insights.",
-        "actions": ["run", "metrics_only"],
-    },
-    "calendar_sync": {
-        "description": "Integra Google Calendar como capacidade opcional de agenda — importa eventos e exporta blocos quando ativado.",
-        "actions": [
-            "import_today",
-            "fetch_today",
-            "fetch_week",
-            "export_block",
-            "status",
         ],
     },
     "capture_agent": {
@@ -118,6 +86,17 @@ AGENTS_REGISTRY = {
             "capture_decision",
             "capture_project",
             "capture_integration",
+        ],
+    },
+    "linear_sync": {
+        "description": (
+            "Cria e atualiza issues no Linear. Use para criar uma issue diretamente "
+            "(com título, descrição, prioridade e data) ou atualizar status/prioridade "
+            "de uma issue existente pelo seu ID interno."
+        ),
+        "actions": [
+            "create_issue",
+            "update_issue",
         ],
     },
 }
@@ -151,9 +130,8 @@ Retorne um JSON com:
 
 Regras importantes:
 - Se precisar de mais informações, defina requires_user_input=true e clarification_question
-- Para criar tarefas, sempre envie para notion_sync E scheduler
+- Para criar tarefas, envie para o scheduler
 - Para marcar tarefa como concluída, sempre passe pelo validator ANTES de confirmar
-- Para verificar agenda, combine scheduler + notion_sync
 - Se o usuário perguntar sobre foco/progresso, acione o focus_guard
 - Se o usuário perguntar sobre atraso, alertas, avisos, notificações ou status do sistema, consulte os agentes.
 - Não responda diretamente sobre estado operacional se você não consultou dados reais.
@@ -182,25 +160,15 @@ DIRECT_RESPONSE_PROMPT = _DIRECT_BASE
 
 
 def _get_routing_prompt() -> str:
-    return sanity_client.get_prompt("orchestrator", "routing", _ROUTING_PROMPT_FALLBACK)
+    return _ROUTING_PROMPT_FALLBACK
 
 
 def _build_synthesis_prompt(persona_id: Optional[str] = None) -> str:
-    """Compõe o prompt de síntese com a persona ativa."""
-    base_prompt = sanity_client.get_prompt("orchestrator", "synthesis", _SYNTHESIS_BASE)
-    persona_override = get_synthesis_prompt(persona_id)
-    if persona_override:
-        return f"{base_prompt}\n\nEstilo de resposta:\n{persona_override}"
-    return base_prompt
+    return _SYNTHESIS_BASE
 
 
 def _build_direct_prompt(persona_id: Optional[str] = None) -> str:
-    """Compõe o prompt de resposta direta com a persona ativa."""
-    base_prompt = sanity_client.get_prompt("orchestrator", "direct", _DIRECT_BASE)
-    persona_override = get_direct_prompt(persona_id)
-    if persona_override:
-        return f"{base_prompt}\n\nEstilo de resposta:\n{persona_override}"
-    return base_prompt
+    return _DIRECT_BASE
 
 
 def _context_history_text(context: Optional[dict]) -> str:
@@ -543,11 +511,9 @@ Retorne o JSON de roteamento.""",
 _AGENT_HANDLERS = {
     "scheduler": scheduler.handle_handoff,
     "focus_guard": focus_guard.handle_handoff,
-    "notion_sync": notion_sync.handle_handoff,
     "validator": validator.handle_handoff,
-    "retrospective": retrospective.handle_handoff,
-    "calendar_sync": calendar_sync.handle_handoff,
     "capture_agent": capture_agent.handle_handoff,
+    "linear_sync": linear_sync.handle_handoff,
 }
 
 
@@ -627,9 +593,6 @@ def synthesize_response(
     history_block = f"Histórico recente:\n{history_text}\n\n" if history_text else ""
 
     synthesis_prompt = _build_synthesis_prompt(persona_id)
-    persona_system = get_system_prompt(persona_id)
-    if persona_system:
-        synthesis_prompt = f"{synthesis_prompt}\n\nPersonalidade:\n{persona_system}"
 
     messages = [
         {"role": "system", "content": synthesis_prompt},
@@ -648,7 +611,7 @@ Forneça uma resposta útil e clara ao usuário.""",
     try:
         response = chat_completions(
             messages=messages,
-            temperature=get_temperature(persona_id, "synthesis"),
+            temperature=0.3,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -685,10 +648,8 @@ def process(
         Resposta final em texto para exibir ao usuário.
     """
     notifier.separator("ORCHESTRATOR")
-    persona = get_persona(persona_id)
-    persona_label = persona.get("short_name", "default") if persona else "default"
     notifier.agent_event(
-        f'[{persona_label}] Input: "{user_input[:80]}{"..." if len(user_input) > 80 else ""}"',
+        f'Input: "{user_input[:80]}{"..." if len(user_input) > 80 else ""}"',
         AGENT_NAME,
     )
 
@@ -736,9 +697,6 @@ def _direct_response(
     history_block = f"Histórico recente:\n{history_text}\n\n" if history_text else ""
 
     direct_prompt = _build_direct_prompt(persona_id)
-    persona_system = get_system_prompt(persona_id)
-    if persona_system:
-        direct_prompt = f"{direct_prompt}\n\nPersonalidade:\n{persona_system}"
 
     try:
         response = chat_completions(
@@ -752,7 +710,7 @@ def _direct_response(
                     "content": f"{history_block}Pergunta atual: {user_input}",
                 },
             ],
-            temperature=get_temperature(persona_id, "direct"),
+            temperature=0.5,
         )
         content = response.choices[0].message.content.strip()
         if _is_parrot_reply(user_input, content):

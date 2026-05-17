@@ -1,1 +1,2 @@
-web: uvicorn web.app:app --host 0.0.0.0 --port $PORT
+daemon: python main.py daemon
+telegram: python -m agents.telegram_bot

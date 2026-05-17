@@ -27,8 +27,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from agents import (
     focus_guard,
-    life_guard,
-    notion_sync,
     orchestrator,
     scheduler,
     validator,
@@ -194,32 +192,12 @@ def cmd_add_task() -> None:
     )
     notifier.success(f"Tarefa criada localmente (ID: {task_id}).", "add-task")
 
-    # Pergunta se quer sincronizar com Notion
-    sync_notion = input("  Sincronizar com Notion? [s/N]: ").strip().lower()
-    if sync_notion == "s":
-        result = notion_sync.sync_local_task_to_notion(task_id)
-        if result:
-            notifier.success("Tarefa enviada ao Notion!", "add-task")
-
     # Pergunta se quer adicionar bloco de agenda
     add_block = input("  Adicionar bloco de agenda hoje? [s/N]: ").strip().lower()
     if add_block == "s":
         time_slot = input("  Bloco horário (ex: 09:00-10:00): ").strip()
         if time_slot:
             scheduler.add_schedule_block(time_slot, title, task_id)
-
-
-def cmd_sync() -> None:
-    """Sincroniza dados com o Notion."""
-    notifier.separator("SINCRONIZAÇÃO NOTION")
-    result = notion_sync.handle_handoff({"action": "sync_from_notion"})
-    if result["status"] == "success":
-        r = result["result"]
-        notifier.success(
-            f"Sincronização completa: {r.get('synced', 0)} tarefa(s) importada(s)."
-        )
-    else:
-        notifier.error(f"Erro na sincronização: {result['result'].get('error', '?')}")
 
 
 def cmd_focus_start(task_id: Optional[int] = None) -> None:
@@ -416,7 +394,7 @@ def cmd_chat() -> None:
     notifier.separator("MODO INTERATIVO")
     notifier.info("Digite sua solicitação em linguagem natural.", "chat")
     notifier.info(
-        "Comandos especiais: /status | /agenda | /tasks | /sync | /demo | /quit", "chat"
+        "Comandos especiais: /status | /agenda | /tasks | /demo | /quit", "chat"
     )
     notifier.separator()
 
@@ -445,8 +423,6 @@ def cmd_chat() -> None:
                 cmd_agenda()
             elif cmd == "tasks":
                 cmd_tasks()
-            elif cmd == "sync":
-                cmd_sync()
             elif cmd == "demo":
                 cmd_demo()
             elif cmd.startswith("focus start"):
@@ -484,140 +460,6 @@ def cmd_chat() -> None:
     notifier.info("Saindo do modo interativo.", "chat")
 
 
-# ---------------------------------------------------------------------------
-# Comandos Life Guard
-# ---------------------------------------------------------------------------
-
-
-def cmd_vida() -> None:
-    """Exibe status das rotinas pessoais do dia e dispara checks."""
-    notifier.separator("LIFE GUARD — ROTINAS DO DIA")
-    result = life_guard.run_all_checks()
-    notifier.info(
-        f"Rotinas disparadas: {result['routines'] or 'nenhuma pendente'}", "life_guard"
-    )
-    notifier.info(
-        f"Hidratação: {'lembrete enviado' if result['hydration'] else 'ok'}",
-        "life_guard",
-    )
-    notifier.info(
-        f"Financas alertadas: {result['finances'] or 'nenhuma vencendo'}", "life_guard"
-    )
-    notifier.separator()
-
-
-def cmd_pagar(args_str: str) -> None:
-    """Registra uma conta a pagar. Uso: pagar <nome> dia <N> valor <V>"""
-    # ex: "Cartao XP dia 15 valor 1200"
-    import re
-
-    match = re.match(r"(.+?)\s+dia\s+(\d+)\s+valor\s+([\d.,]+)", args_str.strip())
-    if not match:
-        notifier.error(
-            "Formato: pagar <nome> dia <N> valor <V>  (ex: pagar Cartao XP dia 15 valor 1200)",
-            "life_guard",
-        )
-        return
-    name = match.group(1).strip()
-    due_day = int(match.group(2))
-    amount = float(match.group(3).replace(",", "."))
-    life_guard.add_finance(name, due_day, amount)
-    notifier.success(
-        f"Registrado: {name} — vence dia {due_day} — R$ {amount:.2f}", "life_guard"
-    )
-
-
-def cmd_fiz(rotina: str) -> None:
-    """Confirma que uma rotina foi feita. Uso: fiz <exercicio|banho|almoco|jantar>"""
-    routine_map = {
-        "exercicio": "exercise",
-        "banho": "shower",
-        "almoco": "lunch",
-        "jantar": "dinner",
-    }
-    routine_id = routine_map.get(rotina.strip().lower())
-    if not routine_id:
-        notifier.error(
-            f"Rotina desconhecida: '{rotina}'. Opcoes: {', '.join(routine_map)}",
-            "life_guard",
-        )
-        return
-    life_guard.confirm_routine(routine_id)
-    notifier.success(f"Rotina '{rotina}' confirmada para hoje.", "life_guard")
-
-
-# ---------------------------------------------------------------------------
-# Novos comandos Phase 2
-# ---------------------------------------------------------------------------
-
-
-def cmd_retrospective() -> None:
-    """Gera a retrospectiva semanal."""
-    from agents import retrospective as retro
-
-    notifier.separator("RETROSPECTIVA SEMANAL")
-
-    push = input("  Criar página no Notion? [s/N]: ").strip().lower() == "s"
-    result = retro.run_retrospective(push_to_notion=push)
-
-    m = result["metrics"]
-    notifier.success(
-        f"Retrospectiva gerada! Foco: {m['total_focus_hours']}h | "
-        f"Tarefas: {m['tasks_completed']} | Taxa: {m['completion_rate_pct']}%"
-    )
-    notifier.info(f"Salvo em: {result['local_path']}", "retrospective")
-
-    print(f"\n{result['report_preview']}")
-
-
-def cmd_web() -> None:
-    """Inicia a interface web."""
-    import uvicorn
-
-    from config import WEB_HOST, WEB_PORT
-
-    notifier.info(f"Iniciando interface web em http://{WEB_HOST}:{WEB_PORT}", "web")
-    uvicorn.run("web.app:app", host=WEB_HOST, port=WEB_PORT, reload=False)
-
-
-def cmd_calendar_auth() -> None:
-    """Autoriza a integração opcional com Google Calendar."""
-    from agents import calendar_sync
-
-    notifier.info(
-        "Iniciando fluxo de autorização da integração opcional com Google Calendar...",
-        "calendar",
-    )
-    notifier.info("O browser será aberto para autorização.", "calendar")
-    if calendar_sync.authorize():
-        notifier.success(
-            "Autorização concluída! Use 'calendar import' para importar eventos."
-        )
-    else:
-        notifier.error("Autorização falhou. Verifique o credentials.json.")
-
-
-def cmd_calendar_import() -> None:
-    """Importa eventos de hoje da integração opcional com Google Calendar."""
-    from agents import calendar_sync
-
-    count = calendar_sync.import_today_as_blocks()
-    notifier.success(f"{count} evento(s) importados como blocos de agenda.")
-
-
-def cmd_calendar_status() -> None:
-    """Status da integração opcional com o Google Calendar."""
-    from agents import calendar_sync
-
-    notifier.separator("GOOGLE CALENDAR STATUS")
-    notifier.info(f"Autorizado: {calendar_sync.is_authorized()}", "calendar")
-    notifier.info(f"Calendário: {calendar_sync.GOOGLE_CALENDAR_ID}", "calendar")
-    if calendar_sync.is_authorized():
-        events = calendar_sync.fetch_today_events()
-        notifier.info(f"Eventos hoje: {len(events)}", "calendar")
-        for ev in events[:5]:
-            notifier.info(f"  {ev['time_slot']} — {ev['title']}", "calendar")
-    notifier.separator()
 
 
 # ---------------------------------------------------------------------------
@@ -637,7 +479,6 @@ Exemplos:
   python main.py agenda              # Agenda de hoje
   python main.py tasks               # Lista de tarefas
   python main.py add-task            # Wizard para nova tarefa
-  python main.py sync                # Sincroniza com Notion
   python main.py suggest             # Sugestão de agenda via LLM
   python main.py focus start 3       # Foca na tarefa ID 3
   python main.py focus end           # Encerra sessão de foco
@@ -663,9 +504,6 @@ Exemplos:
     # add-task
     subparsers.add_parser("add-task", help="Wizard para adicionar nova tarefa")
 
-    # sync
-    subparsers.add_parser("sync", help="Sincroniza com Notion")
-
     # suggest
     subparsers.add_parser("suggest", help="Sugere agenda otimizada via LLM")
 
@@ -684,26 +522,6 @@ Exemplos:
 
     # demo
     subparsers.add_parser("demo", help="Cria dados de demonstração")
-
-    # retrospective
-    subparsers.add_parser("retrospective", help="Gera retrospectiva semanal")
-
-    # web
-    subparsers.add_parser("web", help="Inicia interface web (FastAPI)")
-
-    # vida / life guard
-    subparsers.add_parser("vida", help="Status das rotinas pessoais do dia")
-    subparsers.add_parser("life", help="Status das rotinas pessoais do dia (alias)")
-
-    pagar_parser = subparsers.add_parser(
-        "pagar", help="Registra conta a pagar (ex: pagar Cartao XP dia 15 valor 1200)"
-    )
-    pagar_parser.add_argument("args", nargs=argparse.REMAINDER)
-
-    fiz_parser = subparsers.add_parser(
-        "fiz", help="Confirma rotina feita (ex: fiz banho)"
-    )
-    fiz_parser.add_argument("rotina", nargs="?", default="")
 
     # ecosistema
     subparsers.add_parser(
@@ -770,16 +588,10 @@ Exemplos:
         "telegram", help="Inicia o bot do Telegram em long-poll (worker mode)"
     )
 
-    # calendar
-    calendar_parser = subparsers.add_parser(
-        "calendar", help="Gerencia integração opcional com Google Calendar"
+    # daemon — focus_guard + schedulers em background, bloqueia com sleep loop
+    subparsers.add_parser(
+        "daemon", help="Inicia o daemon (Focus Guard + schedulers) em foreground"
     )
-    cal_sub = calendar_parser.add_subparsers(dest="calendar_action", metavar="AÇÃO")
-    cal_sub.add_parser("auth", help="Autoriza acesso opcional ao Google Calendar")
-    cal_sub.add_parser(
-        "import", help="Importa eventos opcionais de hoje como blocos de agenda"
-    )
-    cal_sub.add_parser("status", help="Status da integração opcional com o Calendar")
 
     return parser
 
@@ -802,8 +614,8 @@ def cmd_capture(text: str) -> None:
         notifier.success(
             f"[{result['category']}] → {result['destination']}", "capture"
         )
-        if result.get("notion_url"):
-            print(f"  {result['notion_url']}")
+        if result.get("issue_url"):
+            print(f"  {result['issue_url']}")
     else:
         notifier.error(f"Falhou: {result.get('error')}", "capture")
         print(_json.dumps(result, indent=2, ensure_ascii=False))
@@ -859,6 +671,22 @@ def cmd_classify(text: str) -> None:
     print(_json.dumps(cls, indent=2, ensure_ascii=False))
 
 
+def cmd_daemon() -> None:
+    """Inicia o Focus Guard em background thread e bloqueia até SIGTERM/SIGINT."""
+    import time as _time
+
+    _startup()
+    focus_guard.start_guard()
+    notifier.success("Daemon iniciado. Aguardando sinais...", "daemon")
+    try:
+        while True:
+            _time.sleep(60)
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        focus_guard.stop_guard()
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -885,8 +713,6 @@ def main() -> None:
         cmd_tasks()
     elif command == "add-task":
         cmd_add_task()
-    elif command == "sync":
-        cmd_sync()
     elif command == "suggest":
         cmd_suggest_agenda()
     elif command == "focus":
@@ -900,10 +726,6 @@ def main() -> None:
         cmd_validate(getattr(args, "task_id", None))
     elif command == "demo":
         cmd_demo()
-    elif command == "retrospective":
-        cmd_retrospective()
-    elif command == "web":
-        cmd_web()
     elif command == "ecosistema":
         from agents import ecosystem_monitor
 
@@ -911,21 +733,6 @@ def main() -> None:
         print(report)
     elif command == "github":
         cmd_github(args)
-    elif command in ("vida", "life"):
-        cmd_vida()
-    elif command == "pagar":
-        cmd_pagar(" ".join(getattr(args, "args", [])))
-    elif command == "fiz":
-        cmd_fiz(getattr(args, "rotina", ""))
-    elif command == "calendar":
-        if args.calendar_action == "auth":
-            cmd_calendar_auth()
-        elif args.calendar_action == "import":
-            cmd_calendar_import()
-        elif args.calendar_action == "status":
-            cmd_calendar_status()
-        else:
-            notifier.error("Use: python main.py calendar [auth|import|status]", "main")
     elif command == "capture":
         cmd_capture(" ".join(getattr(args, "text", []) or []))
     elif command == "classify":
@@ -933,6 +740,8 @@ def main() -> None:
     elif command == "telegram":
         from agents import telegram_bot
         telegram_bot.run()
+    elif command == "daemon":
+        cmd_daemon()
     else:
         parser.print_help()
 
